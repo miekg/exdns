@@ -8,11 +8,13 @@
 package main
 
 import (
+	"flag"
 	"github.com/miekg/dns"
 	"log"
 	"os"
 	"os/signal"
 	"runtime"
+	"runtime/pprof"
 	"syscall"
 )
 
@@ -43,7 +45,16 @@ var zones = map[string]dns.RR{
 }
 
 func main() {
+	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
 	runtime.GOMAXPROCS(runtime.NumCPU() * 4)
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 	for z, rr := range zones {
 		rrx := rr.(*dns.SOA) // Needed to create the actual RR, and not an reference.
 		dns.HandleFunc(z, func(w dns.ResponseWriter, r *dns.Msg) {
