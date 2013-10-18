@@ -182,10 +182,6 @@ func main() {
 	}
 
 	dns.HandleFunc("miek.nl.", handleReflect)
-	dns.HandleFunc("authors.bind.", dns.HandleAuthors)
-	dns.HandleFunc("authors.server.", dns.HandleAuthors)
-	dns.HandleFunc("version.bind.", dns.HandleVersion)
-	dns.HandleFunc("version.server.", dns.HandleVersion)
 	go serve("tcp", name, secret)
 	go serve("udp", name, secret)
 	sig := make(chan os.Signal)
