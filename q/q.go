@@ -48,6 +48,7 @@ func main() {
 	rd := flag.Bool("rd", true, "set RD flag in query")
 	fallback := flag.Bool("fallback", false, "fallback to 4096 bytes bufsize and after that TCP")
 	tcp := flag.Bool("tcp", false, "TCP mode")
+	multi := flag.Bool("multi", false, "ask multiple questions over one TCP connection")
 	nsid := flag.Bool("nsid", false, "set edns nsid option")
 	client := flag.String("client", "", "set edns client-subnet option")
 	clientdraftcode := flag.Bool("clientdraft", false, "set edns client-subnet option using the draft option code")
@@ -216,6 +217,74 @@ Flags:
 		}
 		m.Extra = append(m.Extra, o)
 	}
+	if *multi {
+		co := new(dns.Conn)
+		tcp := "tcp"
+		if *six {
+			tcp = "tcp6"
+		}
+		defer co.Close()
+		var err error
+		if co.Conn, err = net.DialTimeout(tcp, nameserver, 2*time.Second); err != nil {
+			fmt.Fprintf(os.Stderr, "Dialing ", nameserver, " failed: "+err.Error()+"\n")
+			return
+		}
+		for i, v := range qname {
+			qt := dns.TypeA
+			qc := uint16(dns.ClassINET)
+			if i < len(qtype) {
+				qt = qtype[i]
+			}
+			if i < len(qclass) {
+				qc = qclass[i]
+			}
+			m.Question[0] = dns.Question{dns.Fqdn(v), qt, qc}
+			m.Id = dns.Id()
+			if *tsig != "" {
+				if algo, name, secret, ok := tsigKeyParse(*tsig); ok {
+					m.SetTsig(name, algo, 300, time.Now().Unix())
+					c.TsigSecret = map[string]string{name: secret}
+					t.TsigSecret = map[string]string{name: secret}
+				} else {
+					fmt.Fprintf(os.Stderr, ";; TSIG key data error\n")
+					continue
+				}
+			}
+			co.SetReadDeadline(time.Now().Add(2 * time.Second))
+			co.SetWriteDeadline(time.Now().Add(2 * time.Second))
+
+			if *query {
+				fmt.Printf("%s", m.String())
+				fmt.Printf("\n;; size: %d bytes\n\n", m.Len())
+			}
+			then := time.Now()
+			if e := co.WriteMsg(m); e != nil {
+				fmt.Fprintf(os.Stderr, ";; %s\n", e.Error())
+				continue
+			}
+			r, e := co.ReadMsg()
+			if e != nil {
+				fmt.Fprintf(os.Stderr, ";; %s\n", e.Error())
+				continue
+			}
+			rtt := time.Since(then)
+			if r.Id != m.Id {
+				fmt.Fprintf(os.Stderr, "Id mismatch\n")
+				continue
+			}
+
+			if *check {
+				sigCheck(r, nameserver, true)
+			}
+			if *short {
+				r = shortMsg(r)
+			}
+
+			fmt.Printf("%v", r)
+			fmt.Printf("\n;; query time: %.3d µs, server: %s(%s), size: %d bytes\n", rtt/1e3, nameserver, tcp, r.Len())
+		}
+		return
+	}
 
 query:
 	for i, v := range qname {
@@ -236,7 +305,7 @@ query:
 				t.TsigSecret = map[string]string{name: secret}
 			} else {
 				fmt.Fprintf(os.Stderr, "TSIG key data error\n")
-				return
+				continue
 			}
 		}
 		if *query {
@@ -434,25 +503,4 @@ func shortRR(r dns.RR) dns.RR {
 		}
 	}
 	return r
-}
-
-func doXfr(c *dns.Client, m *dns.Msg, nameserver string) {
-	/*
-		if t, e := c.TransferIn(m, nameserver); e == nil {
-			for r := range t {
-				if r.Error == nil {
-					for _, rr := range r.RR {
-						if *short {
-							rr = shortRR(rr)
-						}
-						fmt.Printf("%v\n", rr)
-					}
-				} else {
-					fmt.Fprintf(os.Stderr, "Failure to read XFR: %s\n", r.Error.Error())
-				}
-			}
-		} else {
-			fmt.Fprintf(os.Stderr, "Failure to read XFR: %s\n", e.Error())
-		}
-	*/
 }
