@@ -57,9 +57,11 @@ func main() {
 		flag.PrintDefaults()
 	}
 
-	qtype := uint16(0)
-	qclass := uint16(dns.ClassINET)
-	var qname []string
+	var (
+		qtype  []uint16
+		qclass []uint16
+		qname  []string
+	)
 
 	flag.Parse()
 	if *anchor != "" {
@@ -90,33 +92,44 @@ Flags:
 		// First class, then type, to make ANY queries possible
 		// And if it looks like type, it is a type
 		if k, ok := dns.StringToType[strings.ToUpper(flag.Arg(i))]; ok {
-			qtype = k
+			qtype = append(qtype, k)
 			continue Flags
 		}
 		// If it looks like a class, it is a class
 		if k, ok := dns.StringToClass[strings.ToUpper(flag.Arg(i))]; ok {
-			qclass = k
+			qclass = append(qclass, k)
 			continue Flags
 		}
 		// If it starts with TYPExxx it is unknown rr
 		if strings.HasPrefix(flag.Arg(i), "TYPE") {
 			i, e := strconv.Atoi(string([]byte(flag.Arg(i))[4:]))
 			if e == nil {
-				qtype = uint16(i)
+				qtype = append(qtype, uint16(i))
 				continue Flags
 			}
 		}
-
+		// If it starts with CLASSxxx it is unknown class
+		if strings.HasPrefix(flag.Arg(i), "CLASS") {
+			i, e := strconv.Atoi(string([]byte(flag.Arg(i))[5:]))
+			if e == nil {
+				qclass = append(qclass, uint16(i))
+				continue Flags
+			}
+		}
 		// Anything else is a qname
 		qname = append(qname, flag.Arg(i))
 	}
 	if len(qname) == 0 {
-		qname = make([]string, 1)
-		qname[0] = "."
-		qtype = dns.TypeNS
+		qname = []string{"."}
+		if len(qtype) == 0 {
+			qtype = append(qtype, dns.TypeNS)
+		}
 	}
-	if qtype == 0 {
-		qtype = dns.TypeA
+	if len(qtype) == 0 {
+		qtype = append(qtype, dns.TypeA)
+	}
+	if len(qclass) == 0 {
+		qclass = append(qclass, dns.ClassINET)
 	}
 
 	if len(nameserver) == 0 {
@@ -205,8 +218,16 @@ Flags:
 	}
 
 query:
-	for _, v := range qname {
-		m.Question[0] = dns.Question{dns.Fqdn(v), qtype, qclass}
+	for i, v := range qname {
+		qt := dns.TypeA
+		qc := uint16(dns.ClassINET)
+		if i < len(qtype) {
+			qt = qtype[i]
+		}
+		if i < len(qclass) {
+			qc = qclass[i]
+		}
+		m.Question[0] = dns.Question{dns.Fqdn(v), qt, qc}
 		m.Id = dns.Id()
 		if *tsig != "" {
 			if algo, name, secret, ok := tsigKeyParse(*tsig); ok {
@@ -222,7 +243,7 @@ query:
 			fmt.Printf("%s", m.String())
 			fmt.Printf("\n;; size: %d bytes\n\n", m.Len())
 		}
-		if qtype == dns.TypeAXFR || qtype == dns.TypeIXFR {
+		if qt == dns.TypeAXFR || qt == dns.TypeIXFR {
 			env, err := t.In(m, nameserver)
 			if err != nil {
 				fmt.Printf(";; %s\n", err.Error())
@@ -238,7 +259,7 @@ query:
 				for _, r := range e.RR {
 					fmt.Printf("%s\n", r)
 				}
-				record+=len(e.RR)
+				record += len(e.RR)
 				envelope++
 			}
 			fmt.Printf("\n;; xfr size: %d records (envelopes %d)\n", record, envelope)
