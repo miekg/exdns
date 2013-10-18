@@ -25,7 +25,7 @@ import (
 	"time"
 )
 
-// TODO: serial in ixfr
+// TODO(miek): serial in ixfr
 
 var (
 	dnskey *dns.DNSKEY
@@ -53,7 +53,7 @@ func main() {
 	clientdraftcode := flag.Bool("clientdraft", false, "set edns client-subnet option using the draft option code")
 	//serial := flag.Int("serial", 0, "perform an IXFR with this serial")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [options] [@server] [qtype] [qclass] [name ...]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [options] [@server] [qtype...] [qclass...] [name ...]\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 
