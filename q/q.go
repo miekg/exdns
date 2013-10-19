@@ -223,12 +223,12 @@ Flags:
 		if *six {
 			tcp = "tcp6"
 		}
-		defer co.Close()
 		var err error
 		if co.Conn, err = net.DialTimeout(tcp, nameserver, 2*time.Second); err != nil {
-			fmt.Fprintf(os.Stderr, "Dialing ", nameserver, " failed: "+err.Error()+"\n")
+			fmt.Fprintf(os.Stderr, "Dialing "+nameserver+" failed: "+err.Error()+"\n")
 			return
 		}
+		defer co.Close()
 		for i, v := range qname {
 			qt := dns.TypeA
 			qc := uint16(dns.ClassINET)
