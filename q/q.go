@@ -47,8 +47,7 @@ func main() {
 	cd := flag.Bool("cd", false, "set CD flag in query")
 	rd := flag.Bool("rd", true, "set RD flag in query")
 	fallback := flag.Bool("fallback", false, "fallback to 4096 bytes bufsize and after that TCP")
-	tcp := flag.Bool("tcp", false, "TCP mode")
-	multi := flag.Bool("multi", false, "ask multiple questions over one TCP connection")
+	tcp := flag.Bool("tcp", false, "TCP mode, multiple queries are asked over the same connection")
 	nsid := flag.Bool("nsid", false, "set edns nsid option")
 	client := flag.String("client", "", "set edns client-subnet option")
 	clientdraftcode := flag.Bool("clientdraft", false, "set edns client-subnet option using the draft option code")
@@ -217,7 +216,7 @@ Flags:
 		}
 		m.Extra = append(m.Extra, o)
 	}
-	if *multi {
+	if *tcp {
 		co := new(dns.Conn)
 		tcp := "tcp"
 		if *six {
@@ -346,24 +345,22 @@ Query:
 			return
 		}
 		if r.MsgHdr.Truncated && *fallback {
-			if c.Net != "tcp" {
-				if !*dnssec {
-					fmt.Printf(";; Truncated, trying %d bytes bufsize\n", dns.DefaultMsgSize)
-					o := new(dns.OPT)
-					o.Hdr.Name = "."
-					o.Hdr.Rrtype = dns.TypeOPT
-					o.SetUDPSize(dns.DefaultMsgSize)
-					m.Extra = append(m.Extra, o)
-					r, rtt, e = c.Exchange(m, nameserver)
-					*dnssec = true
-					goto Redo
-				} else {
-					// First EDNS, then TCP
-					fmt.Printf(";; Truncated, trying TCP\n")
-					c.Net = "tcp"
-					r, rtt, e = c.Exchange(m, nameserver)
-					goto Redo
-				}
+			if !*dnssec {
+				fmt.Printf(";; Truncated, trying %d bytes bufsize\n", dns.DefaultMsgSize)
+				o := new(dns.OPT)
+				o.Hdr.Name = "."
+				o.Hdr.Rrtype = dns.TypeOPT
+				o.SetUDPSize(dns.DefaultMsgSize)
+				m.Extra = append(m.Extra, o)
+				r, rtt, e = c.Exchange(m, nameserver)
+				*dnssec = true
+				goto Redo
+			} else {
+				// First EDNS, then TCP
+				fmt.Printf(";; Truncated, trying TCP\n")
+				c.Net = "tcp"
+				r, rtt, e = c.Exchange(m, nameserver)
+				goto Redo
 			}
 		}
 		if r.MsgHdr.Truncated && !*fallback {
