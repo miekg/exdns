@@ -229,9 +229,9 @@ Flags:
 			return
 		}
 		defer co.Close()
+		qt := dns.TypeA
+		qc := uint16(dns.ClassINET)
 		for i, v := range qname {
-			qt := dns.TypeA
-			qc := uint16(dns.ClassINET)
 			if i < len(qtype) {
 				qt = qtype[i]
 			}
@@ -286,10 +286,11 @@ Flags:
 		return
 	}
 
-query:
+	qt := dns.TypeA
+	qc := uint16(dns.ClassINET)
+
+Query:
 	for i, v := range qname {
-		qt := dns.TypeA
-		qc := uint16(dns.ClassINET)
 		if i < len(qtype) {
 			qt = qtype[i]
 		}
@@ -323,7 +324,7 @@ query:
 			for e := range env {
 				if e.Error != nil {
 					fmt.Printf(";; %s\n", e.Error.Error())
-					continue query
+					continue Query
 				}
 				for _, r := range e.RR {
 					fmt.Printf("%s\n", r)
