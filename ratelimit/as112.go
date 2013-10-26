@@ -31,7 +31,7 @@ const (
 type bucket struct {
 	source net.Addr  // client address
 	stamp  time.Time // time of last count update
-	rate   int       // rate of the queries for this client
+	rate   int       // rate of the queries for this client, in qps
 	count  int       // number of requests seen in the last secnd
 }
 
