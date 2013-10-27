@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/pprof"
+	"strconv"
 	"syscall"
 )
 
@@ -46,6 +47,8 @@ var zones = map[string]dns.RR{
 
 func main() {
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
+	ratelimit := flag.Bool("ratelimit", false, "ratelimit responses using RRL")
+	port := flag.Int("port", 8053, "port to run on")
 	runtime.GOMAXPROCS(runtime.NumCPU() * 4)
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
@@ -65,16 +68,22 @@ func main() {
 			w.WriteMsg(m)
 		})
 	}
+	var b *dns.ResponseRatelimit = nil
+	if *ratelimit {
+		b = dns.NewResponseRatelimit()
+	}
 	go func() {
-		err := dns.ListenAndServe(":8053", "tcp", nil)
+		srv := &dns.Server{Addr: ":" + strconv.Itoa(*port), Net: "udp", Ratelimiter: b}
+		err := srv.ListenAndServe()
 		if err != nil {
-			log.Fatal("Failed to set tcp listener %s\n", err.Error())
+			log.Fatal("Failed to set udp listener %s\n", err.Error())
 		}
 	}()
 	go func() {
-		err := dns.ListenAndServe(":8053", "udp", nil)
+		srv := &dns.Server{Addr: ":" + strconv.Itoa(*port), Net: "tcp", Ratelimiter: b}
+		err := srv.ListenAndServe()
 		if err != nil {
-			log.Fatal("Failed to set udp listener %s\n", err.Error())
+			log.Fatal("Failed to set tcp listener %s\n", err.Error())
 		}
 	}()
 	sig := make(chan os.Signal)
