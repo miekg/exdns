@@ -49,6 +49,7 @@ func main() {
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
 	ratelimit := flag.Bool("ratelimit", false, "ratelimit responses using RRL")
 	port := flag.Int("port", 8053, "port to run on")
+	flag.Parse()
 	runtime.GOMAXPROCS(runtime.NumCPU() * 4)
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
@@ -58,6 +59,10 @@ func main() {
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
+	var b *dns.ResponseRatelimit
+	if *ratelimit {
+		b = dns.NewResponseRatelimit()
+	}
 	for z, rr := range zones {
 		rrx := rr.(*dns.SOA) // Needed to create the actual RR, and not an reference.
 		dns.HandleFunc(z, func(w dns.ResponseWriter, r *dns.Msg) {
@@ -65,12 +70,9 @@ func main() {
 			m.SetReply(r)
 			m.Authoritative = true
 			m.Ns = []dns.RR{rrx}
+			b.Count(w.RemoteAddr(), r, m)
 			w.WriteMsg(m)
 		})
-	}
-	var b *dns.ResponseRatelimit = nil
-	if *ratelimit {
-		b = dns.NewResponseRatelimit()
 	}
 	go func() {
 		srv := &dns.Server{Addr: ":" + strconv.Itoa(*port), Net: "udp", Ratelimiter: b}
