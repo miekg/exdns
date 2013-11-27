@@ -51,6 +51,8 @@ func main() {
 	nsid := flag.Bool("nsid", false, "set edns nsid option")
 	client := flag.String("client", "", "set edns client-subnet option")
 	clientdraftcode := flag.Bool("clientdraft", false, "set edns client-subnet option using the draft option code")
+	update := flag.Bool("update", false, "set opcode to UPDATE")
+	notify := flag.Bool("notify", false, "set opcode to NOTIFY")
 	//serial := flag.Int("serial", 0, "perform an IXFR with this serial")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options] [@server] [qtype...] [qclass...] [name ...]\n", os.Args[0])
@@ -178,6 +180,12 @@ Flags:
 	m.MsgHdr.CheckingDisabled = *cd
 	m.MsgHdr.RecursionDesired = *rd
 	m.Question = make([]dns.Question, 1)
+	if *update {
+		m.Opcode = dns.OpcodeUpdate
+	}
+	if *notify {
+		m.Opcode = dns.OpcodeNotify
+	}
 
 	if *dnssec || *nsid || *client != "" {
 		o := new(dns.OPT)
