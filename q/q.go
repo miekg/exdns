@@ -469,7 +469,7 @@ func denialCheck(in *dns.Msg) {
 		return
 	}
 	if nsec3 {
-		denial3(denial, in.Question[0].Name, in.Question[0].Qtype)
+		denial3(denial, in)
 		return
 	}
 	if nsec {
@@ -478,8 +478,11 @@ func denialCheck(in *dns.Msg) {
 }
 
 // NSEC3 Helper
-func denial3(nsec3 []dns.RR, qname string, qtype uint16) {
-	if len(nsec3) == 1 {
+func denial3(nsec3 []dns.RR, in *dns.Msg) {
+	qname := in.Question[0].Name
+	qtype := in.Question[0].Qtype
+	switch in.Rcode {
+	case dns.RcodeSuccess:
 		// qname should match nsec3, type should not be in bitmap
 		match := nsec3[0].(*dns.NSEC3).Match(qname)
 		if !match {
@@ -503,53 +506,53 @@ func denial3(nsec3 []dns.RR, qname string, qtype uint16) {
 			dns.TypeToString[qtype])
 		fmt.Printf(";+ Denial, secure authenticated denial of existence proof for no data\n")
 		return
-	}
-	// NXDOMAIN Proof
-	indx := dns.Split(qname)
-	ce := "" // Closest Encloser
-	nc := "" // Next Closer
-	wc := "" // Source of Synthesis (wildcard)
-ClosestEncloser:
-	for i := 0; i < len(indx); i++ {
-		for j := 0; j < len(nsec3); j++ {
-			if nsec3[j].(*dns.NSEC3).Match(qname[indx[i]:]) {
-				ce = qname[indx[i]:]
-				wc = "*." + ce
-				if i == 0 {
-					nc = qname
-				} else {
-					nc = qname[indx[i-1]:]
+	case dns.RcodeNameError: // NXDOMAIN Proof
+		indx := dns.Split(qname)
+		ce := "" // Closest Encloser
+		nc := "" // Next Closer
+		wc := "" // Source of Synthesis (wildcard)
+	ClosestEncloser:
+		for i := 0; i < len(indx); i++ {
+			for j := 0; j < len(nsec3); j++ {
+				if nsec3[j].(*dns.NSEC3).Match(qname[indx[i]:]) {
+					ce = qname[indx[i]:]
+					wc = "*." + ce
+					if i == 0 {
+						nc = qname
+					} else {
+						nc = qname[indx[i-1]:]
+					}
+					break ClosestEncloser
 				}
-				break ClosestEncloser
 			}
 		}
-	}
-	if ce == "" {
-		fmt.Printf(";- Denial, closest encloser not found\n")
+		if ce == "" {
+			fmt.Printf(";- Denial, closest encloser not found\n")
+			return
+		}
+		fmt.Printf(";+ Denial, closest encloser, %s (%s)\n", ce,
+			strings.ToLower(dns.HashName(ce, nsec3[0].(*dns.NSEC3).Hash, nsec3[0].(*dns.NSEC3).Iterations, nsec3[0].(*dns.NSEC3).Salt)))
+		covered := 0 // Both nc and wc must be covered
+		for i := 0; i < len(nsec3); i++ {
+			if nsec3[i].(*dns.NSEC3).Cover(nc) {
+				fmt.Printf(";+ Denial, next closer %s (%s), covered by %s -> %s\n", nc, nsec3[i].Header().Name, nsec3[i].(*dns.NSEC3).NextDomain,
+					strings.ToLower(dns.HashName(ce, nsec3[0].(*dns.NSEC3).Hash, nsec3[0].(*dns.NSEC3).Iterations, nsec3[0].(*dns.NSEC3).Salt)))
+				covered++
+			}
+			if nsec3[i].(*dns.NSEC3).Cover(wc) {
+				fmt.Printf(";+ Denial, source of synthesis %s (%s), covered by %s -> %s\n", wc, nsec3[i].Header().Name, nsec3[i].(*dns.NSEC3).NextDomain,
+					strings.ToLower(dns.HashName(ce, nsec3[0].(*dns.NSEC3).Hash, nsec3[0].(*dns.NSEC3).Iterations, nsec3[0].(*dns.NSEC3).Salt)))
+				covered++
+			}
+		}
+		if covered != 2 {
+			fmt.Printf(";- Denial, too many, %d, covering records\n", covered)
+			fmt.Printf(";- Denial, failed authenticated denial of existence proof for name error\n")
+			return
+		}
+		fmt.Printf(";+ Denial, secure authenticated denial of existence proof for name error\n")
 		return
 	}
-	fmt.Printf(";+ Denial, closest encloser, %s (%s)\n", ce,
-		strings.ToLower(dns.HashName(ce, nsec3[0].(*dns.NSEC3).Hash, nsec3[0].(*dns.NSEC3).Iterations, nsec3[0].(*dns.NSEC3).Salt)))
-	covered := 0 // Both nc and wc must be covered
-	for i := 0; i < len(nsec3); i++ {
-		if nsec3[i].(*dns.NSEC3).Cover(nc) {
-			fmt.Printf(";+ Denial, next closer %s (%s), covered by %s -> %s\n", nc, nsec3[i].Header().Name, nsec3[i].(*dns.NSEC3).NextDomain,
-				strings.ToLower(dns.HashName(ce, nsec3[0].(*dns.NSEC3).Hash, nsec3[0].(*dns.NSEC3).Iterations, nsec3[0].(*dns.NSEC3).Salt)))
-			covered++
-		}
-		if nsec3[i].(*dns.NSEC3).Cover(wc) {
-			fmt.Printf(";+ Denial, source of synthesis %s (%s), covered by %s -> %s\n", wc, nsec3[i].Header().Name, nsec3[i].(*dns.NSEC3).NextDomain,
-				strings.ToLower(dns.HashName(ce, nsec3[0].(*dns.NSEC3).Hash, nsec3[0].(*dns.NSEC3).Iterations, nsec3[0].(*dns.NSEC3).Salt)))
-			covered++
-		}
-	}
-	if covered != 2 {
-		fmt.Printf(";- Denial, too many, %d, covering records\n", covered)
-		fmt.Printf(";- Denial, failed authenticated denial of existence proof for name error\n")
-		return
-	}
-	fmt.Printf(";+ Denial, secure authenticated denial of existence proof for name error\n")
-	return
 }
 
 // Return the RRset belonging to the signature with name and type t
