@@ -496,7 +496,7 @@ func denial3(nsec3 []dns.RR, qname string, qtype uint16) {
 		fmt.Printf(";+ Denial, matching record, %s, (%s) found and type %s denied\n", qname,
 			strings.ToLower(dns.HashName(qname, nsec3[0].(*dns.NSEC3).Hash, nsec3[0].(*dns.NSEC3).Iterations, nsec3[0].(*dns.NSEC3).Salt)),
 			dns.TypeToString[qtype])
-		fmt.Printf(";+ Denial, authenticated denial of existence proof for no data\n")
+		fmt.Printf(";+ Denial, secure authenticated denial of existence proof for no data\n")
 		return
 	}
 	// NXDOMAIN Proof
@@ -543,7 +543,7 @@ ClosestEncloser:
 		fmt.Printf(";- Denial, failed authenticated denial of existence proof for name error\n")
 		return
 	}
-	fmt.Printf("; + Denial, secure authenticated denial of existence proof for name error\n")
+	fmt.Printf(";+ Denial, secure authenticated denial of existence proof for name error\n")
 	return
 }
 
