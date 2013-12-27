@@ -516,6 +516,7 @@ ClosestEncloser:
 		}
 	}
 	if covered != 2 {
+		fmt.Printf(";- Denial, too many, %d, covering records\n", covered)
 		return
 	}
 	return
