@@ -285,7 +285,7 @@ Flags:
 			if *check {
 				sigCheck(r, nameserver, true)
 				denialCheck(r)
-				fmt.Printf(";\n")
+				fmt.Println()
 			}
 			if *short {
 				r = shortMsg(r)
@@ -381,7 +381,7 @@ Query:
 		if *check {
 			sigCheck(r, nameserver, *tcp)
 			denialCheck(r)
-			fmt.Printf(";\n")
+			fmt.Println()
 		}
 		if *short {
 			r = shortMsg(r)
