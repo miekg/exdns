@@ -477,6 +477,29 @@ func denialCheck(in *dns.Msg) {
 
 // NSEC3 Helper
 func denial3(nsec3 []dns.RR, qname string, qtype uint16) {
+	if len(nsec3) == 1 {
+		// qname should match nsec3, type should not be in bitmap
+		match := nsec3[0].(*dns.NSEC3).Match(qname)
+		if !match {
+			fmt.Printf(";- Denial, owner name does not match qname\n")
+			fmt.Printf(";- Denial, failed authenticated denial of existence proof for no data\n")
+			return
+		}
+		for _, t := range nsec3[0].(*dns.NSEC3).TypeBitMap {
+			if t == qtype {
+				fmt.Printf(";- Denial, found type, %d, in bitmap\n", qtype)
+				fmt.Printf(";- Denial, failed authenticated denial of existence proof for no data\n")
+				return
+			}
+		}
+		// Some success data printed here
+		fmt.Printf(";+ Denial, matching record, %s, (%s) found and type %s denied\n", qname,
+			strings.ToLower(dns.HashName(qname, nsec3[0].(*dns.NSEC3).Hash, nsec3[0].(*dns.NSEC3).Iterations, nsec3[0].(*dns.NSEC3).Salt)),
+			dns.TypeToString[qtype])
+		fmt.Printf(";+ Denial, authenticated denial of existence proof for no data\n")
+		return
+	}
+	// NXDOMAIN Proof
 	indx := dns.Split(qname)
 	ce := "" // Closest Encloser
 	nc := "" // Next Closer
@@ -517,8 +540,10 @@ ClosestEncloser:
 	}
 	if covered != 2 {
 		fmt.Printf(";- Denial, too many, %d, covering records\n", covered)
+		fmt.Printf(";- Denial, failed authenticated denial of existence proof for name error\n")
 		return
 	}
+	fmt.Printf("; + Denial, secure authenticated denial of existence proof for name error\n")
 	return
 }
 
