@@ -284,6 +284,7 @@ Flags:
 
 			if *check {
 				sigCheck(r, nameserver, true)
+				denialCheck(r)
 			}
 			if *short {
 				r = shortMsg(r)
@@ -378,6 +379,7 @@ Query:
 		}
 		if *check {
 			sigCheck(r, nameserver, *tcp)
+			denialCheck(r)
 		}
 		if *short {
 			r = shortMsg(r)
@@ -440,6 +442,83 @@ func sigCheck(in *dns.Msg, server string, tcp bool) {
 	sectionCheck(in.Answer, server, tcp)
 	sectionCheck(in.Ns, server, tcp)
 	sectionCheck(in.Extra, server, tcp)
+}
+
+// Check if there is need for authenticated denial of existence check
+func denialCheck(in *dns.Msg) {
+	denial := make([]dns.RR, 0)
+	// nsec(3) live in the auth section
+	nsec := false
+	nsec3 := false
+	for _, rr := range in.Ns {
+		if rr.Header().Rrtype == dns.TypeNSEC {
+			denial = append(denial, rr)
+			nsec = true
+			continue
+		}
+		if rr.Header().Rrtype == dns.TypeNSEC3 {
+			denial = append(denial, rr)
+			nsec3 = true
+			continue
+		}
+	}
+	if nsec && nsec3 {
+		// What??! Both NSEC and NSEC3 in there?
+		return
+	}
+	if nsec3 {
+		denial3(denial, in.Question[0].Name, in.Question[0].Qtype)
+		return
+	}
+	if nsec {
+		return
+	}
+}
+
+// NSEC3 Helper
+func denial3(nsec3 []dns.RR, qname string, qtype uint16) {
+	indx := dns.Split(qname)
+	ce := "" // Closest Encloser
+	nc := "" // Next Closer
+	wc := "" // Source of Synthesis (wildcard)
+ClosestEncloser:
+	for i := 0; i < len(indx); i++ {
+		for j := 0; j < len(nsec3); j++ {
+			if nsec3[j].(*dns.NSEC3).Match(qname[indx[i]:]) {
+				ce = qname[indx[i]:]
+				wc = "*." + ce
+				if i == 0 {
+					nc = qname
+				} else {
+					nc = qname[indx[i-1]:]
+				}
+				break ClosestEncloser
+			}
+		}
+	}
+	if ce == "" {
+		fmt.Printf(";- Denial, closest encloser not found\n")
+		return
+	}
+	fmt.Printf(";+ Denial, closest encloser, %s (%s)\n", ce,
+		strings.ToLower(dns.HashName(ce, nsec3[0].(*dns.NSEC3).Hash, nsec3[0].(*dns.NSEC3).Iterations, nsec3[0].(*dns.NSEC3).Salt)))
+	covered := 0 // Both nc and wc must be covered
+	for i := 0; i < len(nsec3); i++ {
+		if nsec3[i].(*dns.NSEC3).Cover(nc) {
+			fmt.Printf(";+ Denial, next closer %s (%s), covered by %s -> %s\n", nc, nsec3[i].Header().Name, nsec3[i].(*dns.NSEC3).NextDomain,
+				strings.ToLower(dns.HashName(ce, nsec3[0].(*dns.NSEC3).Hash, nsec3[0].(*dns.NSEC3).Iterations, nsec3[0].(*dns.NSEC3).Salt)))
+			covered++
+		}
+		if nsec3[i].(*dns.NSEC3).Cover(wc) {
+			fmt.Printf(";+ Denial, source of synthesis %s (%s), covered by %s -> %s\n", wc, nsec3[i].Header().Name, nsec3[i].(*dns.NSEC3).NextDomain,
+				strings.ToLower(dns.HashName(ce, nsec3[0].(*dns.NSEC3).Hash, nsec3[0].(*dns.NSEC3).Iterations, nsec3[0].(*dns.NSEC3).Salt)))
+			covered++
+		}
+	}
+	if covered != 2 {
+		return
+	}
+	return
 }
 
 // Return the RRset belonging to the signature with name and type t
