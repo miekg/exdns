@@ -493,6 +493,9 @@ func denial3(nsec3 []dns.RR, qname string, qtype uint16) {
 				fmt.Printf(";- Denial, failed authenticated denial of existence proof for no data\n")
 				return
 			}
+			if t > qtype { // ordered list, bail out, because not found
+				break
+			}
 		}
 		// Some success data printed here
 		fmt.Printf(";+ Denial, matching record, %s, (%s) found and type %s denied\n", qname,
