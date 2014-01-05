@@ -13,7 +13,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"runtime"
 	"runtime/pprof"
 	"strconv"
 	"syscall"
@@ -50,7 +49,6 @@ func main() {
 	ratelimit := flag.Bool("ratelimit", false, "ratelimit responses using RRL")
 	port := flag.Int("port", 8053, "port to run on")
 	flag.Parse()
-	runtime.GOMAXPROCS(runtime.NumCPU() * 4)
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
 		if err != nil {
