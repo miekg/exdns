@@ -62,7 +62,6 @@ func handleReflect(w dns.ResponseWriter, r *dns.Msg) {
 		str string
 		a   net.IP
 	)
-	// TC must be done here
 	m := new(dns.Msg)
 	m.SetReply(r)
 	m.Compress = *compress
@@ -76,17 +75,6 @@ func handleReflect(w dns.ResponseWriter, r *dns.Msg) {
 		a = ip.IP
 		v4 = a.To4() != nil
 	}
-
-	/*
-		if o := r.IsEdns0(); o != nil {
-			for _, s := range o.Option {
-				switch e := s.(type) {
-				case *dns.EDNS0_SUBNET:
-					log.Printf("Edns0 subnet %s", e.Address)
-				}
-			}
-		}
-	*/
 
 	if v4 {
 		rr = new(dns.A)
@@ -137,6 +125,14 @@ func handleReflect(w dns.ResponseWriter, r *dns.Msg) {
 	}
 	if *printf {
 		fmt.Printf("%v\n", m.String())
+	}
+	// set TC when question is tc.miek.nl.
+	if m.Question[0].Name == "tc.miek.nl." {
+		m.Truncated = true
+		// send half a message
+		buf, _ := m.Pack()
+		w.Write(buf[:len(buf)/2])
+		return
 	}
 	w.WriteMsg(m)
 }
