@@ -13,7 +13,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"runtime"
 	"runtime/pprof"
 	"strconv"
 	"syscall"
@@ -47,10 +46,9 @@ var zones = map[string]dns.RR{
 
 func main() {
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
-	ratelimit := flag.Bool("ratelimit", false, "ratelimit responses using RRL")
+//	ratelimit := flag.Bool("ratelimit", false, "ratelimit responses using RRL")
 	port := flag.Int("port", 8053, "port to run on")
 	flag.Parse()
-	runtime.GOMAXPROCS(runtime.NumCPU() * 4)
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
 		if err != nil {
@@ -59,10 +57,6 @@ func main() {
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
-	var b *dns.ResponseRatelimit
-	if *ratelimit {
-		b = dns.NewResponseRatelimit()
-	}
 	for z, rr := range zones {
 		rrx := rr.(*dns.SOA) // Needed to create the actual RR, and not an reference.
 		dns.HandleFunc(z, func(w dns.ResponseWriter, r *dns.Msg) {
@@ -70,19 +64,18 @@ func main() {
 			m.SetReply(r)
 			m.Authoritative = true
 			m.Ns = []dns.RR{rrx}
-			b.Count(w.RemoteAddr(), r, m)
 			w.WriteMsg(m)
 		})
 	}
 	go func() {
-		srv := &dns.Server{Addr: ":" + strconv.Itoa(*port), Net: "udp", Ratelimiter: b}
+		srv := &dns.Server{Addr: ":" + strconv.Itoa(*port), Net: "udp"}
 		err := srv.ListenAndServe()
 		if err != nil {
 			log.Fatal("Failed to set udp listener %s\n", err.Error())
 		}
 	}()
 	go func() {
-		srv := &dns.Server{Addr: ":" + strconv.Itoa(*port), Net: "tcp", Ratelimiter: b}
+		srv := &dns.Server{Addr: ":" + strconv.Itoa(*port), Net: "tcp"}
 		err := srv.ListenAndServe()
 		if err != nil {
 			log.Fatal("Failed to set tcp listener %s\n", err.Error())
