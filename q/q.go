@@ -414,6 +414,10 @@ func sectionCheck(set []dns.RR, server string, tcp bool) {
 	var key *dns.DNSKEY
 	for _, rr := range set {
 		if rr.Header().Rrtype == dns.TypeRRSIG {
+			expired := ""
+			if rr.(*dns.RRSIG).ValidityPeriod(time.Time{}) {
+				expired = "(expired)"
+			}
 			rrset := getRRset(set, rr.Header().Name, rr.(*dns.RRSIG).TypeCovered)
 			if dnskey == nil {
 				key = getKey(rr.(*dns.RRSIG).SignerName, rr.(*dns.RRSIG).KeyTag, server, tcp)
@@ -429,10 +433,10 @@ func sectionCheck(set []dns.RR, server string, tcp bool) {
 				where = "disk"
 			}
 			if err := rr.(*dns.RRSIG).Verify(key, rrset); err != nil {
-				fmt.Printf(";- Bogus signature, %s does not validate (DNSKEY %s/%d/%s) [%s]\n",
-					shortSig(rr.(*dns.RRSIG)), key.Header().Name, key.KeyTag(), where, err.Error())
+				fmt.Printf(";- Bogus signature, %s does not validate (DNSKEY %s/%d/%s) [%s,%s]\n",
+					shortSig(rr.(*dns.RRSIG)), key.Header().Name, key.KeyTag(), where, expired, err.Error())
 			} else {
-				fmt.Printf(";+ Secure signature, %s validates (DNSKEY %s/%d/%s)\n", shortSig(rr.(*dns.RRSIG)), key.Header().Name, key.KeyTag(), where)
+				fmt.Printf(";+ Secure signature, %s validates (DNSKEY %s/%d/%s) [%]\n", shortSig(rr.(*dns.RRSIG)), key.Header().Name, key.KeyTag(), where, expired)
 			}
 		}
 	}
