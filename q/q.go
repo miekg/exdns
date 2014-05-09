@@ -433,10 +433,10 @@ func sectionCheck(set []dns.RR, server string, tcp bool) {
 				where = "disk"
 			}
 			if err := rr.(*dns.RRSIG).Verify(key, rrset); err != nil {
-				fmt.Printf(";- Bogus signature, %s does not validate (DNSKEY %s/%d/%s) [%s,%s]\n",
-					shortSig(rr.(*dns.RRSIG)), key.Header().Name, key.KeyTag(), where, expired, err.Error())
+				fmt.Printf(";- Bogus signature, %s does not validate (DNSKEY %s/%d/%s) [%s] %s\n",
+					shortSig(rr.(*dns.RRSIG)), key.Header().Name, key.KeyTag(), where, err.Error(), expired)
 			} else {
-				fmt.Printf(";+ Secure signature, %s validates (DNSKEY %s/%d/%s) [%]\n", shortSig(rr.(*dns.RRSIG)), key.Header().Name, key.KeyTag(), where, expired)
+				fmt.Printf(";+ Secure signature, %s validates (DNSKEY %s/%d/%s) %s\n", shortSig(rr.(*dns.RRSIG)), key.Header().Name, key.KeyTag(), where, expired)
 			}
 		}
 	}
