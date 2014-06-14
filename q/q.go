@@ -416,7 +416,7 @@ func sectionCheck(set []dns.RR, server string, tcp bool) {
 		if rr.Header().Rrtype == dns.TypeRRSIG {
 			expired := ""
 			if rr.(*dns.RRSIG).ValidityPeriod(time.Time{}) {
-				expired = "(expired)"
+				expired = "(*EXPIRED*)"
 			}
 			rrset := getRRset(set, rr.Header().Name, rr.(*dns.RRSIG).TypeCovered)
 			if dnskey == nil {
