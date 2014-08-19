@@ -49,7 +49,6 @@ import (
 var (
 	printf   *bool
 	compress *bool
-	pool	 *bool
 	tsig     *string
 )
 
@@ -140,13 +139,13 @@ func handleReflect(w dns.ResponseWriter, r *dns.Msg) {
 func serve(net, name, secret string) {
 	switch name {
 	case "":
-		server := &dns.Server{Pool: *pool, Addr: ":8053", Net: net, TsigSecret: nil}
+		server := &dns.Server{Addr: ":8053", Net: net, TsigSecret: nil}
 		err := server.ListenAndServe()
 		if err != nil {
 			fmt.Printf("Failed to setup the "+net+" server: %s\n", err.Error())
 		}
 	default:
-		server := &dns.Server{Pool: *pool, Addr: ":8053", Net: net, TsigSecret: map[string]string{name: secret}}
+		server := &dns.Server{Addr: ":8053", Net: net, TsigSecret: map[string]string{name: secret}}
 		err := server.ListenAndServe()
 		if err != nil {
 			fmt.Printf("Failed to setup the "+net+" server: %s\n", err.Error())
@@ -158,7 +157,6 @@ func main() {
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
 	printf = flag.Bool("print", false, "print replies")
 	compress = flag.Bool("compress", false, "compress replies")
-	pool = flag.Bool("pool", false, "use UDP memory pooling")
 	tsig = flag.String("tsig", "", "use MD5 hmac tsig: keyname:base64")
 	var name, secret string
 	flag.Usage = func() {
