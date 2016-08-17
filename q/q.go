@@ -348,7 +348,32 @@ Query:
 		}
 		r, rtt, e := c.Exchange(m, nameserver)
 	Redo:
-		if e != nil {
+		switch e {
+		case nil:
+			//do nothing
+		case dns.ErrTruncated:
+			if *fallback {
+				if !*dnssec {
+					fmt.Printf(";; Truncated, trying %d bytes bufsize\n", dns.DefaultMsgSize)
+					o := new(dns.OPT)
+					o.Hdr.Name = "."
+					o.Hdr.Rrtype = dns.TypeOPT
+					o.SetUDPSize(dns.DefaultMsgSize)
+					m.Extra = append(m.Extra, o)
+					r, rtt, e = c.Exchange(m, nameserver)
+					*dnssec = true
+					goto Redo
+				} else {
+					// First EDNS, then TCP
+					fmt.Printf(";; Truncated, trying TCP\n")
+					c.Net = "tcp"
+					r, rtt, e = c.Exchange(m, nameserver)
+					*fallback = false
+					goto Redo
+				}
+			}
+			fmt.Printf(";; Truncated\n")
+		default:
 			fmt.Printf(";; %s\n", e.Error())
 			continue
 		}
@@ -356,28 +381,7 @@ Query:
 			fmt.Fprintf(os.Stderr, "Id mismatch\n")
 			return
 		}
-		if r.MsgHdr.Truncated && *fallback {
-			if !*dnssec {
-				fmt.Printf(";; Truncated, trying %d bytes bufsize\n", dns.DefaultMsgSize)
-				o := new(dns.OPT)
-				o.Hdr.Name = "."
-				o.Hdr.Rrtype = dns.TypeOPT
-				o.SetUDPSize(dns.DefaultMsgSize)
-				m.Extra = append(m.Extra, o)
-				r, rtt, e = c.Exchange(m, nameserver)
-				*dnssec = true
-				goto Redo
-			} else {
-				// First EDNS, then TCP
-				fmt.Printf(";; Truncated, trying TCP\n")
-				c.Net = "tcp"
-				r, rtt, e = c.Exchange(m, nameserver)
-				goto Redo
-			}
-		}
-		if r.MsgHdr.Truncated && !*fallback {
-			fmt.Printf(";; Truncated\n")
-		}
+
 		if *check {
 			sigCheck(r, nameserver, *tcp)
 			denialCheck(r)
