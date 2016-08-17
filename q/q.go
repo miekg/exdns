@@ -368,6 +368,7 @@ Query:
 					fmt.Printf(";; Truncated, trying TCP\n")
 					c.Net = "tcp"
 					r, rtt, e = c.Exchange(m, nameserver)
+					*fallback = false
 					goto Redo
 				}
 			}
