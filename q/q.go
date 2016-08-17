@@ -316,6 +316,8 @@ Query:
 				c.TsigSecret = map[string]string{name: secret}
 				t.TsigSecret = map[string]string{name: secret}
 			} else {
+				fmt.Fprintf(os.Stderr, "TSIG key data error\n")
+				continue
 			}
 		}
 		if *query {
