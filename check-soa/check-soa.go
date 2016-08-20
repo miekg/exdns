@@ -63,7 +63,7 @@ func main() {
 	m.Question = make([]dns.Question, 1)
 	c := new(dns.Client)
 	c.ReadTimeout = TIMEOUT * 1e9
-	success := true
+	success := false
 	numNS := 0
 	for _, ans := range r.Answer {
 		switch ans.(type) {
@@ -103,7 +103,6 @@ func main() {
 				}
 			}
 			if len(ips) == 0 {
-				success = false
 				fmt.Printf("No IP address for this server")
 			}
 			for _, ip := range ips {
@@ -118,17 +117,14 @@ func main() {
 				soa, _, err := c.Exchange(m, nsAddressPort)
 				// TODO: retry if timeout? Otherwise, one lost UDP packet and it is the end
 				if soa == nil {
-					success = false
 					fmt.Printf("%s (%s) ", ip, err)
 					goto Next
 				}
 				if soa.Rcode != dns.RcodeSuccess {
-					success = false
 					fmt.Printf("%s (%s) ", ips, dns.RcodeToString[soa.Rcode])
 					goto Next
 				}
-				if len(soa.Answer) == 0 { // May happen if the server is a recursor, not authoritative, since we query with RD=0 
-					success = false
+				if len(soa.Answer) == 0 { // May happen if the server is a recursor, not authoritative, since we query with RD=0
 					fmt.Printf("%s (0 answer) ", ip)
 					goto Next
 				}
@@ -137,9 +133,9 @@ func main() {
 				case *dns.SOA:
 					if soa.Authoritative {
 						// TODO: test if all name servers have the same serial ?
+						success = true
 						fmt.Printf("%s (%d) ", ips, rsoa.(*dns.SOA).Serial)
 					} else {
-						success = false
 						fmt.Printf("%s (not authoritative) ", ips)
 					}
 				}
