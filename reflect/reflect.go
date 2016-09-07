@@ -34,7 +34,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/miekg/dns"
 	"log"
 	"net"
 	"os"
@@ -44,12 +43,15 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/miekg/dns"
 )
 
 var (
-	printf   *bool
-	compress *bool
-	tsig     *string
+	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+	printf     = flag.Bool("print", false, "print replies")
+	compress   = flag.Bool("compress", false, "compress replies")
+	tsig       = flag.String("tsig", "", "use MD5 hmac tsig: keyname:base64")
 )
 
 const dom = "whoami.miek.nl."
@@ -76,18 +78,21 @@ func handleReflect(w dns.ResponseWriter, r *dns.Msg) {
 	}
 
 	if v4 {
-		rr = new(dns.A)
-		rr.(*dns.A).Hdr = dns.RR_Header{Name: dom, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 0}
-		rr.(*dns.A).A = a.To4()
+		rr = &dns.A{
+			Hdr: dns.RR_Header{Name: dom, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 0},
+			A:   a.To4(),
+		}
 	} else {
-		rr = new(dns.AAAA)
-		rr.(*dns.AAAA).Hdr = dns.RR_Header{Name: dom, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 0}
-		rr.(*dns.AAAA).AAAA = a
+		rr = &dns.AAAA{
+			Hdr:  dns.RR_Header{Name: dom, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 0},
+			AAAA: a,
+		}
 	}
 
-	t := new(dns.TXT)
-	t.Hdr = dns.RR_Header{Name: dom, Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: 0}
-	t.Txt = []string{str}
+	t := &dns.TXT{
+		Hdr: dns.RR_Header{Name: dom, Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: 0},
+		Txt: []string{str},
+	}
 
 	switch r.Question[0].Qtype {
 	case dns.TypeTXT:
@@ -98,13 +103,11 @@ func handleReflect(w dns.ResponseWriter, r *dns.Msg) {
 	case dns.TypeAAAA, dns.TypeA:
 		m.Answer = append(m.Answer, rr)
 		m.Extra = append(m.Extra, t)
-
 	case dns.TypeAXFR, dns.TypeIXFR:
 		c := make(chan *dns.Envelope)
 		tr := new(dns.Transfer)
 		defer close(c)
-		err := tr.Out(w, r, c)
-		if err != nil {
+		if err := tr.Out(w, r, c); err != nil {
 			return
 		}
 		soa, _ := dns.NewRR(`whoami.miek.nl. 0 IN SOA linode.atoom.net. miek.miek.nl. 2009032802 21600 7200 604800 3600`)
@@ -112,7 +115,6 @@ func handleReflect(w dns.ResponseWriter, r *dns.Msg) {
 		w.Hijack()
 		// w.Close() // Client closes connection
 		return
-
 	}
 
 	if r.IsTsig() != nil {
@@ -140,24 +142,18 @@ func serve(net, name, secret string) {
 	switch name {
 	case "":
 		server := &dns.Server{Addr: ":8053", Net: net, TsigSecret: nil}
-		err := server.ListenAndServe()
-		if err != nil {
+		if err := server.ListenAndServe(); err != nil {
 			fmt.Printf("Failed to setup the "+net+" server: %s\n", err.Error())
 		}
 	default:
 		server := &dns.Server{Addr: ":8053", Net: net, TsigSecret: map[string]string{name: secret}}
-		err := server.ListenAndServe()
-		if err != nil {
+		if err := server.ListenAndServe(); err != nil {
 			fmt.Printf("Failed to setup the "+net+" server: %s\n", err.Error())
 		}
 	}
 }
 
 func main() {
-	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
-	printf = flag.Bool("print", false, "print replies")
-	compress = flag.Bool("compress", false, "compress replies")
-	tsig = flag.String("tsig", "", "use MD5 hmac tsig: keyname:base64")
 	var name, secret string
 	flag.Usage = func() {
 		flag.PrintDefaults()
@@ -181,12 +177,6 @@ func main() {
 	go serve("udp", name, secret)
 	sig := make(chan os.Signal)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-forever:
-	for {
-		select {
-		case s := <-sig:
-			fmt.Printf("Signal (%d) received, stopping\n", s)
-			break forever
-		}
-	}
+	s := <-sig
+	fmt.Printf("Signal (%s) received, stopping\n", s)
 }

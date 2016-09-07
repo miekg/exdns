@@ -9,17 +9,20 @@ package main
 
 import (
 	"flag"
-	"github.com/miekg/dns"
 	"log"
 	"os"
 	"os/signal"
 	"runtime/pprof"
 	"strconv"
 	"syscall"
+
+	"github.com/miekg/dns"
 )
 
+// SOA is a string we will append everywhere in the zones values.
 const SOA string = "@ SOA prisoner.iana.org. hostmaster.root-servers.org. 2002040800 1800 900 0604800 604800"
 
+// NewRR is a shortcut to dns.NewRR that ignores the error.
 func NewRR(s string) dns.RR { r, _ := dns.NewRR(s); return r }
 
 var zones = map[string]dns.RR{
@@ -46,7 +49,7 @@ var zones = map[string]dns.RR{
 
 func main() {
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
-//	ratelimit := flag.Bool("ratelimit", false, "ratelimit responses using RRL")
+	//	ratelimit := flag.Bool("ratelimit", false, "ratelimit responses using RRL")
 	port := flag.Int("port", 8053, "port to run on")
 	flag.Parse()
 	if *cpuprofile != "" {
@@ -57,6 +60,7 @@ func main() {
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
+
 	for z, rr := range zones {
 		rrx := rr.(*dns.SOA) // Needed to create the actual RR, and not an reference.
 		dns.HandleFunc(z, func(w dns.ResponseWriter, r *dns.Msg) {
@@ -67,26 +71,23 @@ func main() {
 			w.WriteMsg(m)
 		})
 	}
+
 	go func() {
 		srv := &dns.Server{Addr: ":" + strconv.Itoa(*port), Net: "udp"}
-		err := srv.ListenAndServe()
-		if err != nil {
-			log.Fatal("Failed to set udp listener %s\n", err.Error())
+		if err := srv.ListenAndServe(); err != nil {
+			log.Fatalf("Failed to set udp listener %s\n", err.Error())
 		}
 	}()
+
 	go func() {
 		srv := &dns.Server{Addr: ":" + strconv.Itoa(*port), Net: "tcp"}
-		err := srv.ListenAndServe()
-		if err != nil {
-			log.Fatal("Failed to set tcp listener %s\n", err.Error())
+		if err := srv.ListenAndServe(); err != nil {
+			log.Fatalf("Failed to set tcp listener %s\n", err.Error())
 		}
 	}()
+
 	sig := make(chan os.Signal)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	for {
-		select {
-		case s := <-sig:
-			log.Fatalf("Signal (%d) received, stopping\n", s)
-		}
-	}
+	s := <-sig
+	log.Fatalf("Signal (%v) received, stopping\n", s)
 }
