@@ -13,7 +13,9 @@ import (
 )
 
 const (
-	defaulttimeout time.Duration = 5 * time.Second
+	// DefaultTimeout is default timeout many operation in this program will
+	// use.
+	DefaultTimeout time.Duration = 5 * time.Second
 )
 
 var (
@@ -55,7 +57,7 @@ func main() {
 		Question: make([]dns.Question, 1),
 	}
 	localc = &dns.Client{
-		ReadTimeout: defaulttimeout,
+		ReadTimeout: DefaultTimeout,
 	}
 	r, err := localQuery(dns.Fqdn(os.Args[1]), dns.TypeNS)
 	if err != nil || r == nil {
@@ -73,7 +75,7 @@ func main() {
 		Question: make([]dns.Question, 1),
 	}
 	c := &dns.Client{
-		ReadTimeout: defaulttimeout,
+		ReadTimeout: DefaultTimeout,
 	}
 	var success bool
 	var numNS int

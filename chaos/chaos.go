@@ -8,6 +8,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"sync"
@@ -17,13 +18,11 @@ import (
 
 func main() {
 	if len(os.Args) != 2 {
-		fmt.Printf("%s NAMESERVER\n", os.Args[0])
-		os.Exit(1)
+		log.Fatalf("%s NAMESERVER\n", os.Args[0])
 	}
 	conf, err := dns.ClientConfigFromFile("/etc/resolv.conf")
 	if err != nil {
-		fmt.Println("error making client from default file", err)
-		os.Exit(1)
+		log.Fatal("error making client from default file", err)
 	}
 
 	m := &dns.Msg{
@@ -34,8 +33,7 @@ func main() {
 
 	addr := addresses(conf, c, os.Args[1])
 	if len(addr) == 0 {
-		fmt.Printf("No address found for %s\n", os.Args[1])
-		os.Exit(1)
+		log.Fatalf("No address found for %s\n", os.Args[1])
 	}
 	for _, a := range addr {
 		m.Question[0] = dns.Question{"version.bind.", dns.TypeTXT, dns.ClassCHAOS}
@@ -44,7 +42,7 @@ func main() {
 			fmt.Println(err)
 		}
 		if in != nil && len(in.Answer) > 0 {
-			fmt.Printf("(time %.3d µs) %v\n", rtt/1e3, in.Answer[0])
+			log.Printf("(time %.3d µs) %v\n", rtt/1e3, in.Answer[0])
 		}
 		m.Question[0] = dns.Question{"hostname.bind.", dns.TypeTXT, dns.ClassCHAOS}
 		in, rtt, err = c.Exchange(m, a)
@@ -52,7 +50,7 @@ func main() {
 			fmt.Println(err)
 		}
 		if in != nil && len(in.Answer) > 0 {
-			fmt.Printf("(time %.3d µs) %v\n", rtt/1e3, in.Answer[0])
+			log.Printf("(time %.3d µs) %v\n", rtt/1e3, in.Answer[0])
 		}
 	}
 }
