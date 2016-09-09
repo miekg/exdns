@@ -8,50 +8,61 @@ package main
 
 import (
 	"fmt"
-	"github.com/miekg/dns"
+	"log"
 	"net"
 	"os"
+	"sync"
+
+	"github.com/miekg/dns"
 )
 
 func main() {
 	if len(os.Args) != 2 {
-		fmt.Printf("%s NAMESERVER\n", os.Args[0])
-		os.Exit(1)
+		log.Fatalf("%s NAMESERVER\n", os.Args[0])
 	}
-	conf, _ := dns.ClientConfigFromFile("/etc/resolv.conf")
+	conf, err := dns.ClientConfigFromFile("/etc/resolv.conf")
+	if err != nil {
+		log.Fatal("error making client from default file", err)
+	}
 
-	m := new(dns.Msg)
-	m.Question = make([]dns.Question, 1)
+	m := &dns.Msg{
+		Question: make([]dns.Question, 1),
+	}
+
 	c := new(dns.Client)
 
 	addr := addresses(conf, c, os.Args[1])
 	if len(addr) == 0 {
-		fmt.Printf("No address found for %s\n", os.Args[1])
-		os.Exit(1)
+		log.Fatalf("No address found for %s\n", os.Args[1])
 	}
 	for _, a := range addr {
 		m.Question[0] = dns.Question{"version.bind.", dns.TypeTXT, dns.ClassCHAOS}
-		in, rtt, _ := c.Exchange(m, a)
+		in, rtt, err := c.Exchange(m, a)
+		if err != nil {
+			fmt.Println(err)
+		}
 		if in != nil && len(in.Answer) > 0 {
-			fmt.Printf("(time %.3d µs) %v\n", rtt/1e3, in.Answer[0])
+			log.Printf("(time %.3d µs) %v\n", rtt/1e3, in.Answer[0])
 		}
 		m.Question[0] = dns.Question{"hostname.bind.", dns.TypeTXT, dns.ClassCHAOS}
-		in, rtt, _ = c.Exchange(m, a)
+		in, rtt, err = c.Exchange(m, a)
+		if err != nil {
+			fmt.Println(err)
+		}
 		if in != nil && len(in.Answer) > 0 {
-			fmt.Printf("(time %.3d µs) %v\n", rtt/1e3, in.Answer[0])
+			log.Printf("(time %.3d µs) %v\n", rtt/1e3, in.Answer[0])
 		}
 	}
 }
 
-func do(t chan *dns.Msg, c *dns.Client, m *dns.Msg, addr string) {
-	go func() {
-		r, _, err := c.Exchange(m, addr)
-		if err != nil {
-			//print error stuff
-			t <- nil
-		}
-		t <- r
-	}()
+func do(t chan *dns.Msg, wg *sync.WaitGroup, c *dns.Client, m *dns.Msg, addr string) {
+	defer wg.Done()
+	r, _, err := c.Exchange(m, addr)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	t <- r
 }
 
 func addresses(conf *dns.ClientConfig, c *dns.Client, name string) (ips []string) {
@@ -59,37 +70,28 @@ func addresses(conf *dns.ClientConfig, c *dns.Client, name string) (ips []string
 	m4.SetQuestion(dns.Fqdn(os.Args[1]), dns.TypeA)
 	m6 := new(dns.Msg)
 	m6.SetQuestion(dns.Fqdn(os.Args[1]), dns.TypeAAAA)
-	t := make(chan *dns.Msg)
-	defer close(t)
-	do(t, c, m4, net.JoinHostPort(conf.Servers[0], conf.Port))
-	do(t, c, m6, net.JoinHostPort(conf.Servers[0], conf.Port))
+	t := make(chan *dns.Msg, 2)
 
-	i := 2 // two outstanding queries
-forever:
-	for {
-		select {
-		case d := <-t:
-			i--
-			if d == nil {
-				continue
-			}
-			if i == 0 {
-				break forever
-			}
-			if d.Rcode == dns.RcodeSuccess {
-				for _, a := range d.Answer {
-					switch a.(type) {
-					case *dns.A:
-						ips = append(ips,
-							net.JoinHostPort(a.(*dns.A).A.String(), "53"))
-					case *dns.AAAA:
-						ips = append(ips,
-							net.JoinHostPort(a.(*dns.AAAA).AAAA.String(), "53"))
+	wg := new(sync.WaitGroup)
+	wg.Add(2)
+	go do(t, wg, c, m4, net.JoinHostPort(conf.Servers[0], conf.Port))
+	go do(t, wg, c, m6, net.JoinHostPort(conf.Servers[0], conf.Port))
+	wg.Wait()
+	close(t)
 
-					}
+	for d := range t {
+		if d.Rcode == dns.RcodeSuccess {
+			for _, a := range d.Answer {
+				switch t := a.(type) {
+				case *dns.A:
+					ips = append(ips, net.JoinHostPort(t.A.String(), "53"))
+				case *dns.AAAA:
+					ips = append(ips, net.JoinHostPort(t.AAAA.String(), "53"))
+
 				}
 			}
 		}
 	}
+
 	return ips
 }

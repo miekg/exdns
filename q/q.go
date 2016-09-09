@@ -17,42 +17,42 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/miekg/dns"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/miekg/dns"
 )
 
 // TODO(miek): serial in ixfr
 
 var (
-	dnskey *dns.DNSKEY
-	short  *bool
+	dnskey          *dns.DNSKEY
+	short           = flag.Bool("short", false, "abbreviate long DNSSEC records")
+	dnssec          = flag.Bool("dnssec", false, "request DNSSEC records")
+	query           = flag.Bool("question", false, "show question")
+	check           = flag.Bool("check", false, "check internal DNSSEC consistency")
+	six             = flag.Bool("6", false, "use IPv6 only")
+	four            = flag.Bool("4", false, "use IPv4 only")
+	anchor          = flag.String("anchor", "", "use the DNSKEY in this file as trust anchor")
+	tsig            = flag.String("tsig", "", "request tsig with key: [hmac:]name:key")
+	port            = flag.Int("port", 53, "port number to use")
+	aa              = flag.Bool("aa", false, "set AA flag in query")
+	ad              = flag.Bool("ad", false, "set AD flag in query")
+	cd              = flag.Bool("cd", false, "set CD flag in query")
+	rd              = flag.Bool("rd", true, "set RD flag in query")
+	fallback        = flag.Bool("fallback", false, "fallback to 4096 bytes bufsize and after that TCP")
+	tcp             = flag.Bool("tcp", false, "TCP mode, multiple queries are asked over the same connection")
+	nsid            = flag.Bool("nsid", false, "set edns nsid option")
+	client          = flag.String("client", "", "set edns client-subnet option")
+	clientdraftcode = flag.Bool("clientdraft", false, "set edns client-subnet option using the draft option code")
+	opcode          = flag.String("opcode", "query", "set opcode to query|update|notify")
+	rcode           = flag.String("rcode", "success", "set rcode to noerror|formerr|nxdomain|servfail|...")
 )
 
 func main() {
-	short = flag.Bool("short", false, "abbreviate long DNSSEC records")
-	dnssec := flag.Bool("dnssec", false, "request DNSSEC records")
-	query := flag.Bool("question", false, "show question")
-	check := flag.Bool("check", false, "check internal DNSSEC consistency")
-	six := flag.Bool("6", false, "use IPv6 only")
-	four := flag.Bool("4", false, "use IPv4 only")
-	anchor := flag.String("anchor", "", "use the DNSKEY in this file as trust anchor")
-	tsig := flag.String("tsig", "", "request tsig with key: [hmac:]name:key")
-	port := flag.Int("port", 53, "port number to use")
-	aa := flag.Bool("aa", false, "set AA flag in query")
-	ad := flag.Bool("ad", false, "set AD flag in query")
-	cd := flag.Bool("cd", false, "set CD flag in query")
-	rd := flag.Bool("rd", true, "set RD flag in query")
-	fallback := flag.Bool("fallback", false, "fallback to 4096 bytes bufsize and after that TCP")
-	tcp := flag.Bool("tcp", false, "TCP mode, multiple queries are asked over the same connection")
-	nsid := flag.Bool("nsid", false, "set edns nsid option")
-	client := flag.String("client", "", "set edns client-subnet option")
-	clientdraftcode := flag.Bool("clientdraft", false, "set edns client-subnet option using the draft option code")
-	opcode := flag.String("opcode", "query", "set opcode to query|update|notify")
-	rcode := flag.String("rcode", "success", "set rcode to noerror|formerr|nxdomain|servfail|...")
 	//serial := flag.Int("serial", 0, "perform an IXFR with this serial")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options] [@server] [qtype...] [qclass...] [name ...]\n", os.Args[0])
@@ -83,43 +83,41 @@ func main() {
 	}
 
 	var nameserver string
-
-Flags:
-	for i := 0; i < flag.NArg(); i++ {
+	for _, arg := range flag.Args() {
 		// If it starts with @ it is a nameserver
-		if flag.Arg(i)[0] == '@' {
-			nameserver = flag.Arg(i)
-			continue Flags
+		if arg[0] == '@' {
+			nameserver = arg
+			continue
 		}
 		// First class, then type, to make ANY queries possible
 		// And if it looks like type, it is a type
-		if k, ok := dns.StringToType[strings.ToUpper(flag.Arg(i))]; ok {
+		if k, ok := dns.StringToType[strings.ToUpper(arg)]; ok {
 			qtype = append(qtype, k)
-			continue Flags
+			continue
 		}
 		// If it looks like a class, it is a class
-		if k, ok := dns.StringToClass[strings.ToUpper(flag.Arg(i))]; ok {
+		if k, ok := dns.StringToClass[strings.ToUpper(arg)]; ok {
 			qclass = append(qclass, k)
-			continue Flags
+			continue
 		}
 		// If it starts with TYPExxx it is unknown rr
-		if strings.HasPrefix(flag.Arg(i), "TYPE") {
-			i, e := strconv.Atoi(string([]byte(flag.Arg(i))[4:]))
-			if e == nil {
+		if strings.HasPrefix(arg, "TYPE") {
+			i, err := strconv.Atoi(arg[4:])
+			if err == nil {
 				qtype = append(qtype, uint16(i))
-				continue Flags
+				continue
 			}
 		}
 		// If it starts with CLASSxxx it is unknown class
-		if strings.HasPrefix(flag.Arg(i), "CLASS") {
-			i, e := strconv.Atoi(string([]byte(flag.Arg(i))[5:]))
-			if e == nil {
+		if strings.HasPrefix(arg, "CLASS") {
+			i, err := strconv.Atoi(arg[5:])
+			if err == nil {
 				qclass = append(qclass, uint16(i))
-				continue Flags
+				continue
 			}
 		}
 		// Anything else is a qname
-		qname = append(qname, flag.Arg(i))
+		qname = append(qname, arg)
 	}
 	if len(qname) == 0 {
 		qname = []string{"."}
@@ -174,13 +172,16 @@ Flags:
 		}
 	}
 
-	m := new(dns.Msg)
-	m.MsgHdr.Authoritative = *aa
-	m.MsgHdr.AuthenticatedData = *ad
-	m.MsgHdr.CheckingDisabled = *cd
-	m.MsgHdr.RecursionDesired = *rd
-	m.Question = make([]dns.Question, 1)
-	m.Opcode = dns.OpcodeQuery
+	m := &dns.Msg{
+		MsgHdr: dns.MsgHdr{
+			Authoritative:     *aa,
+			AuthenticatedData: *ad,
+			CheckingDisabled:  *cd,
+			RecursionDesired:  *rd,
+		},
+		Question: make([]dns.Question, 1),
+		Opcode:   dns.OpcodeQuery,
+	}
 	if op, ok := dns.StringToOpcode[strings.ToUpper(*opcode)]; ok {
 		m.Opcode = op
 	}
@@ -190,34 +191,41 @@ Flags:
 	}
 
 	if *dnssec || *nsid || *client != "" {
-		o := new(dns.OPT)
-		o.Hdr.Name = "."
-		o.Hdr.Rrtype = dns.TypeOPT
+		o := &dns.OPT{
+			Hdr: Hdr{
+				Name:   ".",
+				Rrtype: dns.TypeOPT,
+			},
+		}
 		if *dnssec {
 			o.SetDo()
 			o.SetUDPSize(dns.DefaultMsgSize)
 		}
 		if *nsid {
-			e := new(dns.EDNS0_NSID)
-			e.Code = dns.EDNS0NSID
+			e := &dns.EDNS0_NSID{
+				Code: dns.EDNS0NSID,
+			}
 			o.Option = append(o.Option, e)
 			// NSD will not return nsid when the udp message size is too small
 			o.SetUDPSize(dns.DefaultMsgSize)
 		}
 		if *client != "" {
-			e := new(dns.EDNS0_SUBNET)
-			e.Code = dns.EDNS0SUBNET
-			if *clientdraftcode {
-				e.DraftOption = true
+			e := &dns.EDNS0_SUBNET{
+				Code:          dns.EDNS0SUBNET,
+				Address:       net.ParseIP(*client),
+				Family:        1, // IP4
+				SourceNetmask: net.IPv4len * 8,
 			}
-			e.SourceScope = 0
-			e.Address = net.ParseIP(*client)
+
 			if e.Address == nil {
 				fmt.Fprintf(os.Stderr, "Failure to parse IP address: %s\n", *client)
 				return
 			}
-			e.Family = 1 // IP4
-			e.SourceNetmask = net.IPv4len * 8
+
+			if *clientdraftcode {
+				e.DraftOption = true
+			}
+
 			if e.Address.To4() == nil {
 				e.Family = 2 // IP6
 				e.SourceNetmask = net.IPv6len * 8
@@ -247,7 +255,7 @@ Flags:
 			if i < len(qclass) {
 				qc = qclass[i]
 			}
-			m.Question[0] = dns.Question{dns.Fqdn(v), qt, qc}
+			m.Question[0] = dns.Question{Name: dns.Fqdn(v), Qtype: qt, Qclass: qc}
 			m.Id = dns.Id()
 			if *tsig != "" {
 				if algo, name, secret, ok := tsigKeyParse(*tsig); ok {
@@ -267,12 +275,12 @@ Flags:
 				fmt.Printf("\n;; size: %d bytes\n\n", m.Len())
 			}
 			then := time.Now()
-			if e := co.WriteMsg(m); e != nil {
+			if err := co.WriteMsg(m); err != nil {
 				fmt.Fprintf(os.Stderr, ";; %s\n", e.Error())
 				continue
 			}
-			r, e := co.ReadMsg()
-			if e != nil {
+			r, err := co.ReadMsg()
+			if err != nil {
 				fmt.Fprintf(os.Stderr, ";; %s\n", e.Error())
 				continue
 			}
@@ -288,7 +296,7 @@ Flags:
 				fmt.Println()
 			}
 			if *short {
-				r = shortMsg(r)
+				shortenMsg(r)
 			}
 
 			fmt.Printf("%v", r)
@@ -308,7 +316,7 @@ Query:
 		if i < len(qclass) {
 			qc = qclass[i]
 		}
-		m.Question[0] = dns.Question{dns.Fqdn(v), qt, qc}
+		m.Question[0] = dns.Question{Name: dns.Fqdn(v), Qtype: qt, Qclass: qc}
 		m.Id = dns.Id()
 		if *tsig != "" {
 			if algo, name, secret, ok := tsigKeyParse(*tsig); ok {
@@ -330,8 +338,7 @@ Query:
 				fmt.Printf(";; %s\n", err.Error())
 				continue
 			}
-			envelope := 0
-			record := 0
+			var envelope, record int
 			for e := range env {
 				if e.Error != nil {
 					fmt.Printf(";; %s\n", e.Error.Error())
@@ -346,9 +353,9 @@ Query:
 			fmt.Printf("\n;; xfr size: %d records (envelopes %d)\n", record, envelope)
 			continue
 		}
-		r, rtt, e := c.Exchange(m, nameserver)
+		r, rtt, err := c.Exchange(m, nameserver)
 	Redo:
-		switch e {
+		switch err {
 		case nil:
 			//do nothing
 		case dns.ErrTruncated:
@@ -388,7 +395,7 @@ Query:
 			fmt.Println()
 		}
 		if *short {
-			r = shortMsg(r)
+			shortenMsg(r)
 		}
 
 		fmt.Printf("%v", r)
@@ -418,7 +425,7 @@ func sectionCheck(set []dns.RR, server string, tcp bool) {
 	var key *dns.DNSKEY
 	for _, rr := range set {
 		if rr.Header().Rrtype == dns.TypeRRSIG {
-			expired := ""
+			var expired string
 			if !rr.(*dns.RRSIG).ValidityPeriod(time.Now().UTC()) {
 				expired = "(*EXPIRED*)"
 			}
@@ -456,10 +463,9 @@ func sigCheck(in *dns.Msg, server string, tcp bool) {
 
 // Check if there is need for authenticated denial of existence check
 func denialCheck(in *dns.Msg) {
-	denial := make([]dns.RR, 0)
+	var denial []dns.RR
 	// nsec(3) live in the auth section
-	nsec := false
-	nsec3 := false
+	var nsec, nsec3 bool
 	for _, rr := range in.Ns {
 		if rr.Header().Rrtype == dns.TypeNSEC {
 			denial = append(denial, rr)
@@ -472,15 +478,8 @@ func denialCheck(in *dns.Msg) {
 			continue
 		}
 	}
-	if nsec && nsec3 {
-		// What??! Both NSEC and NSEC3 in there?
-		return
-	}
 	if nsec3 {
 		denial3(denial, in)
-		return
-	}
-	if nsec {
 		return
 	}
 }
@@ -516,9 +515,9 @@ func denial3(nsec3 []dns.RR, in *dns.Msg) {
 		return
 	case dns.RcodeNameError: // NXDOMAIN Proof
 		indx := dns.Split(qname)
-		ce := "" // Closest Encloser
-		nc := "" // Next Closer
-		wc := "" // Source of Synthesis (wildcard)
+		var ce string // Closest Encloser
+		var nc string // Next Closer
+		var wc string // Source of Synthesis (wildcard)
 	ClosestEncloser:
 		for i := 0; i < len(indx); i++ {
 			for j := 0; j < len(nsec3); j++ {
@@ -565,7 +564,7 @@ func denial3(nsec3 []dns.RR, in *dns.Msg) {
 
 // Return the RRset belonging to the signature with name and type t
 func getRRset(l []dns.RR, name string, t uint16) []dns.RR {
-	l1 := make([]dns.RR, 0)
+	var l1 []dns.RR
 	for _, rr := range l {
 		if strings.ToLower(rr.Header().Name) == strings.ToLower(name) && rr.Header().Rrtype == t {
 			l1 = append(l1, rr)
@@ -598,23 +597,22 @@ func getKey(name string, keytag uint16, server string, tcp bool) *dns.DNSKEY {
 	return nil
 }
 
-// shorten RRSIG to "miek.nl RRSIG(NS)"
+// shortSig shortens RRSIG to "miek.nl RRSIG(NS)"
 func shortSig(sig *dns.RRSIG) string {
 	return sig.Header().Name + " RRSIG(" + dns.TypeToString[sig.TypeCovered] + ")"
 }
 
-// Walk trough message and short Key data and Sig data
-func shortMsg(in *dns.Msg) *dns.Msg {
-	for i := 0; i < len(in.Answer); i++ {
-		in.Answer[i] = shortRR(in.Answer[i])
+// shortenMsg walks trough message and shortens Key data and Sig data.
+func shortenMsg(in *dns.Msg) {
+	for i, answer := range in.Answer {
+		in.Answer[i] = shortRR(answer)
 	}
-	for i := 0; i < len(in.Ns); i++ {
-		in.Ns[i] = shortRR(in.Ns[i])
+	for i, ns := range in.Ns {
+		in.Ns[i] = shortRR(ns)
 	}
-	for i := 0; i < len(in.Extra); i++ {
-		in.Extra[i] = shortRR(in.Extra[i])
+	for i, extra := range in.Extra {
+		in.Extra[i] = shortRR(extra)
 	}
-	return in
 }
 
 func shortRR(r dns.RR) dns.RR {

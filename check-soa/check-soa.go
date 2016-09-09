@@ -5,14 +5,17 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/miekg/dns"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/miekg/dns"
 )
 
 const (
-	TIMEOUT time.Duration = 5 // seconds
+	// DefaultTimeout is default timeout many operation in this program will
+	// use.
+	DefaultTimeout time.Duration = 5 * time.Second
 )
 
 var (
@@ -26,6 +29,9 @@ func localQuery(qname string, qtype uint16) (*dns.Msg, error) {
 	for i := range conf.Servers {
 		server := conf.Servers[i]
 		r, _, err := localc.Exchange(localm, server+":"+conf.Port)
+		if err != nil {
+			return nil, err
+		}
 		if r == nil || r.Rcode == dns.RcodeNameError || r.Rcode == dns.RcodeSuccess {
 			return r, err
 		}
@@ -34,23 +40,27 @@ func localQuery(qname string, qtype uint16) (*dns.Msg, error) {
 }
 
 func main() {
-	var err error
 	if len(os.Args) != 2 {
 		fmt.Printf("%s ZONE\n", os.Args[0])
 		os.Exit(1)
 	}
+	var err error
 	conf, err = dns.ClientConfigFromFile("/etc/resolv.conf")
-	if conf == nil {
+	if err != nil || conf == nil {
 		fmt.Printf("Cannot initialize the local resolver: %s\n", err)
 		os.Exit(1)
 	}
-	localm = new(dns.Msg)
-	localm.RecursionDesired = true
-	localm.Question = make([]dns.Question, 1)
-	localc = new(dns.Client)
-	localc.ReadTimeout = TIMEOUT * 1e9
+	localm = &dns.Msg{
+		MsgHdr: dns.MsgHdr{
+			RecursionDesired: true,
+		},
+		Question: make([]dns.Question, 1),
+	}
+	localc = &dns.Client{
+		ReadTimeout: DefaultTimeout,
+	}
 	r, err := localQuery(dns.Fqdn(os.Args[1]), dns.TypeNS)
-	if r == nil {
+	if err != nil || r == nil {
 		fmt.Printf("Cannot retrieve the list of name servers for %s: %s\n", dns.Fqdn(os.Args[1]), err)
 		os.Exit(1)
 	}
@@ -58,22 +68,26 @@ func main() {
 		fmt.Printf("No such domain %s\n", dns.Fqdn(os.Args[1]))
 		os.Exit(1)
 	}
-	m := new(dns.Msg)
-	m.RecursionDesired = false
-	m.Question = make([]dns.Question, 1)
-	c := new(dns.Client)
-	c.ReadTimeout = TIMEOUT * 1e9
-	success := true
-	numNS := 0
+	m := &dns.Msg{
+		MsgHdr: dns.MsgHdr{
+			RecursionDesired: false,
+		},
+		Question: make([]dns.Question, 1),
+	}
+	c := &dns.Client{
+		ReadTimeout: DefaultTimeout,
+	}
+	var success bool
+	var numNS int
 	for _, ans := range r.Answer {
-		switch ans.(type) {
+		switch t := ans.(type) {
 		case *dns.NS:
-			nameserver := ans.(*dns.NS).Ns
-			numNS += 1
-			ips := make([]string, 0)
+			nameserver := t.Ns
+			numNS++
+			var ips []string
 			fmt.Printf("%s : ", nameserver)
 			ra, err := localQuery(nameserver, dns.TypeA)
-			if ra == nil {
+			if err != nil || ra == nil {
 				fmt.Printf("Error getting the IPv4 address of %s: %s\n", nameserver, err)
 				os.Exit(1)
 			}
@@ -82,13 +96,13 @@ func main() {
 				os.Exit(1)
 			}
 			for _, ansa := range ra.Answer {
-				switch ansa.(type) {
+				switch ansb := ansa.(type) {
 				case *dns.A:
-					ips = append(ips, ansa.(*dns.A).A.String())
+					ips = append(ips, ansb.A.String())
 				}
 			}
 			raaaa, err := localQuery(nameserver, dns.TypeAAAA)
-			if raaaa == nil {
+			if err != nil || raaaa == nil {
 				fmt.Printf("Error getting the IPv6 address of %s: %s\n", nameserver, err)
 				os.Exit(1)
 			}
@@ -97,18 +111,17 @@ func main() {
 				os.Exit(1)
 			}
 			for _, ansaaaa := range raaaa.Answer {
-				switch ansaaaa.(type) {
+				switch tansaaaa := ansaaaa.(type) {
 				case *dns.AAAA:
-					ips = append(ips, ansaaaa.(*dns.AAAA).AAAA.String())
+					ips = append(ips, tansaaaa.AAAA.String())
 				}
 			}
 			if len(ips) == 0 {
-				success = false
 				fmt.Printf("No IP address for this server")
 			}
 			for _, ip := range ips {
-				m.Question[0] = dns.Question{dns.Fqdn(os.Args[1]), dns.TypeSOA, dns.ClassINET}
-				nsAddressPort := ""
+				m.Question[0] = dns.Question{Name: dns.Fqdn(os.Args[1]), Qtype: dns.TypeSOA, Qclass: dns.ClassINET}
+				var nsAddressPort string
 				if strings.ContainsAny(":", ip) {
 					// IPv6 address
 					nsAddressPort = "[" + ip + "]:53"
@@ -117,43 +130,39 @@ func main() {
 				}
 				soa, _, err := c.Exchange(m, nsAddressPort)
 				// TODO: retry if timeout? Otherwise, one lost UDP packet and it is the end
-				if soa == nil {
-					success = false
+				if err != nil || soa == nil {
 					fmt.Printf("%s (%s) ", ip, err)
 					goto Next
 				}
 				if soa.Rcode != dns.RcodeSuccess {
-					success = false
 					fmt.Printf("%s (%s) ", ips, dns.RcodeToString[soa.Rcode])
 					goto Next
 				}
-				if len(soa.Answer) == 0 { // May happen if the server is a recursor, not authoritative, since we query with RD=0 
-					success = false
+				if len(soa.Answer) == 0 { // May happen if the server is a recursor, not authoritative, since we query with RD=0
 					fmt.Printf("%s (0 answer) ", ip)
 					goto Next
 				}
 				rsoa := soa.Answer[0]
-				switch rsoa.(type) {
+				switch trsoa := rsoa.(type) {
 				case *dns.SOA:
 					if soa.Authoritative {
 						// TODO: test if all name servers have the same serial ?
-						fmt.Printf("%s (%d) ", ips, rsoa.(*dns.SOA).Serial)
+						fmt.Printf("%s (%d) ", ips, trsoa.Serial)
 					} else {
-						success = false
 						fmt.Printf("%s (not authoritative) ", ips)
 					}
 				}
 			}
+			success = true
 		Next:
 			fmt.Printf("\n")
 		}
 	}
 	if numNS == 0 {
-		fmt.Printf("No NS records for \"%s\". It is probably a CNAME to a domain but not a zone\n", dns.Fqdn(os.Args[1]))
+		fmt.Printf("No NS records for %q. It is probably a CNAME to a domain but not a zone\n", dns.Fqdn(os.Args[1]))
 		os.Exit(1)
 	}
-	if success {
-		os.Exit(0)
+	if !success {
+		os.Exit(1)
 	}
-	os.Exit(1)
 }
