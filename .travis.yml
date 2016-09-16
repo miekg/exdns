@@ -1,0 +1,12 @@
+language: go
+sudo: false
+go:
+  - 1.5
+  - 1.6
+  - 1.7
+script:
+  - cd $HOME/gopath/src/github.com/miekg/exdns/q; go build
+  - cd $HOME/gopath/src/github.com/miekg/exdns/as112; go build
+  - cd $HOME/gopath/src/github.com/miekg/exdns/chaos; go build
+  - cd $HOME/gopath/src/github.com/miekg/exdns/check-soa; go build
+  - cd $HOME/gopath/src/github.com/miekg/exdns/reflect; go build
