@@ -464,26 +464,24 @@ func sigCheck(in *dns.Msg, server string, tcp bool) {
 // Check if there is need for authenticated denial of existence check
 func denialCheck(in *dns.Msg) {
 	var denial []dns.RR
-	// nsec(3) live in the auth section
-	var nsec, nsec3 bool
+	// nsec(3) lives in the auth section
 	for _, rr := range in.Ns {
 		if rr.Header().Rrtype == dns.TypeNSEC {
-			denial = append(denial, rr)
-			nsec = true
-			continue
+			return
 		}
 		if rr.Header().Rrtype == dns.TypeNSEC3 {
 			denial = append(denial, rr)
-			nsec3 = true
 			continue
 		}
 	}
-	if nsec3 {
+
+	if len(denial) > 0 {
 		denial3(denial, in)
 	}
 	if nsec {
 		fmt.Printf(";+ Unimplemented: check for denial-of-existence for nsec\n")
 	}
+	return
 }
 
 // NSEC3 Helper
