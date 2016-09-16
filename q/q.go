@@ -178,9 +178,9 @@ func main() {
 			AuthenticatedData: *ad,
 			CheckingDisabled:  *cd,
 			RecursionDesired:  *rd,
+			Opcode:            dns.OpcodeQuery,
 		},
 		Question: make([]dns.Question, 1),
-		Opcode:   dns.OpcodeQuery,
 	}
 	if op, ok := dns.StringToOpcode[strings.ToUpper(*opcode)]; ok {
 		m.Opcode = op
@@ -192,7 +192,7 @@ func main() {
 
 	if *dnssec || *nsid || *client != "" {
 		o := &dns.OPT{
-			Hdr: Hdr{
+			Hdr: dns.RR_Header{
 				Name:   ".",
 				Rrtype: dns.TypeOPT,
 			},
@@ -276,12 +276,12 @@ func main() {
 			}
 			then := time.Now()
 			if err := co.WriteMsg(m); err != nil {
-				fmt.Fprintf(os.Stderr, ";; %s\n", e.Error())
+				fmt.Fprintf(os.Stderr, ";; %s\n", err.Error())
 				continue
 			}
 			r, err := co.ReadMsg()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, ";; %s\n", e.Error())
+				fmt.Fprintf(os.Stderr, ";; %s\n", err.Error())
 				continue
 			}
 			rtt := time.Since(then)
@@ -367,21 +367,21 @@ Query:
 					o.Hdr.Rrtype = dns.TypeOPT
 					o.SetUDPSize(dns.DefaultMsgSize)
 					m.Extra = append(m.Extra, o)
-					r, rtt, e = c.Exchange(m, nameserver)
+					r, rtt, err = c.Exchange(m, nameserver)
 					*dnssec = true
 					goto Redo
 				} else {
 					// First EDNS, then TCP
 					fmt.Printf(";; Truncated, trying TCP\n")
 					c.Net = "tcp"
-					r, rtt, e = c.Exchange(m, nameserver)
+					r, rtt, err = c.Exchange(m, nameserver)
 					*fallback = false
 					goto Redo
 				}
 			}
 			fmt.Printf(";; Truncated\n")
 		default:
-			fmt.Printf(";; %s\n", e.Error())
+			fmt.Printf(";; %s\n", err.Error())
 			continue
 		}
 		if r.Id != m.Id {
@@ -480,7 +480,9 @@ func denialCheck(in *dns.Msg) {
 	}
 	if nsec3 {
 		denial3(denial, in)
-		return
+	}
+	if nsec {
+		fmt.Printf(";+ Unimplemented: check for denial-of-existence for nsec\n")
 	}
 }
 
