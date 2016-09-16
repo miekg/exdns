@@ -478,9 +478,7 @@ func denialCheck(in *dns.Msg) {
 	if len(denial) > 0 {
 		denial3(denial, in)
 	}
-	if nsec {
-		fmt.Printf(";+ Unimplemented: check for denial-of-existence for nsec\n")
-	}
+	fmt.Printf(";+ Unimplemented: check for denial-of-existence for nsec\n")
 	return
 }
 
