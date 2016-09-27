@@ -1,7 +1,10 @@
+[![Build Status](https://travis-ci.org/miekg/exdns.svg?branch=master)](https://travis-ci.org/miekg/exdns)
+[![BSD 2-clause license](https://img.shields.io/github/license/miekg/exdns.svg?maxAge=2592000)](https://opensource.org/licenses/BSD-2-Clause)
+
 # Examples made with Go DNS
 
 This repository has a bunch of example programs that
-are made with the `github.com:miekg/dns` Go package.
+are made with the https://github.com/miekg/dns Go package.
 
 Currently they include:
 
