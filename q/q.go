@@ -29,27 +29,26 @@ import (
 // TODO(miek): serial in ixfr
 
 var (
-	dnskey          *dns.DNSKEY
-	short           = flag.Bool("short", false, "abbreviate long DNSSEC records")
-	dnssec          = flag.Bool("dnssec", false, "request DNSSEC records")
-	query           = flag.Bool("question", false, "show question")
-	check           = flag.Bool("check", false, "check internal DNSSEC consistency")
-	six             = flag.Bool("6", false, "use IPv6 only")
-	four            = flag.Bool("4", false, "use IPv4 only")
-	anchor          = flag.String("anchor", "", "use the DNSKEY in this file as trust anchor")
-	tsig            = flag.String("tsig", "", "request tsig with key: [hmac:]name:key")
-	port            = flag.Int("port", 53, "port number to use")
-	aa              = flag.Bool("aa", false, "set AA flag in query")
-	ad              = flag.Bool("ad", false, "set AD flag in query")
-	cd              = flag.Bool("cd", false, "set CD flag in query")
-	rd              = flag.Bool("rd", true, "set RD flag in query")
-	fallback        = flag.Bool("fallback", false, "fallback to 4096 bytes bufsize and after that TCP")
-	tcp             = flag.Bool("tcp", false, "TCP mode, multiple queries are asked over the same connection")
-	nsid            = flag.Bool("nsid", false, "set edns nsid option")
-	client          = flag.String("client", "", "set edns client-subnet option")
-	clientdraftcode = flag.Bool("clientdraft", false, "set edns client-subnet option using the draft option code")
-	opcode          = flag.String("opcode", "query", "set opcode to query|update|notify")
-	rcode           = flag.String("rcode", "success", "set rcode to noerror|formerr|nxdomain|servfail|...")
+	dnskey   *dns.DNSKEY
+	short    = flag.Bool("short", false, "abbreviate long DNSSEC records")
+	dnssec   = flag.Bool("dnssec", false, "request DNSSEC records")
+	query    = flag.Bool("question", false, "show question")
+	check    = flag.Bool("check", false, "check internal DNSSEC consistency")
+	six      = flag.Bool("6", false, "use IPv6 only")
+	four     = flag.Bool("4", false, "use IPv4 only")
+	anchor   = flag.String("anchor", "", "use the DNSKEY in this file as trust anchor")
+	tsig     = flag.String("tsig", "", "request tsig with key: [hmac:]name:key")
+	port     = flag.Int("port", 53, "port number to use")
+	aa       = flag.Bool("aa", false, "set AA flag in query")
+	ad       = flag.Bool("ad", false, "set AD flag in query")
+	cd       = flag.Bool("cd", false, "set CD flag in query")
+	rd       = flag.Bool("rd", true, "set RD flag in query")
+	fallback = flag.Bool("fallback", false, "fallback to 4096 bytes bufsize and after that TCP")
+	tcp      = flag.Bool("tcp", false, "TCP mode, multiple queries are asked over the same connection")
+	nsid     = flag.Bool("nsid", false, "set edns nsid option")
+	client   = flag.String("client", "", "set edns client-subnet option")
+	opcode   = flag.String("opcode", "query", "set opcode to query|update|notify")
+	rcode    = flag.String("rcode", "success", "set rcode to noerror|formerr|nxdomain|servfail|...")
 )
 
 func main() {
@@ -220,10 +219,6 @@ func main() {
 			if e.Address == nil {
 				fmt.Fprintf(os.Stderr, "Failure to parse IP address: %s\n", *client)
 				return
-			}
-
-			if *clientdraftcode {
-				e.DraftOption = true
 			}
 
 			if e.Address.To4() == nil {
