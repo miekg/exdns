@@ -121,6 +121,7 @@ func main() {
 			}
 			for _, ip := range ips {
 				m.Question[0] = dns.Question{Name: dns.Fqdn(os.Args[1]), Qtype: dns.TypeSOA, Qclass: dns.ClassINET}
+				m.Id = dns.Id()
 				var nsAddressPort string
 				if strings.ContainsAny(":", ip) {
 					// IPv6 address
