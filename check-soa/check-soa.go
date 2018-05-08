@@ -26,8 +26,7 @@ var (
 
 func localQuery(qname string, qtype uint16) (*dns.Msg, error) {
 	localm.SetQuestion(qname, qtype)
-	for i := range conf.Servers {
-		server := conf.Servers[i]
+	for _, server := range conf.Servers {
 		r, _, err := localc.Exchange(localm, server+":"+conf.Port)
 		if err != nil {
 			return nil, err
