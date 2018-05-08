@@ -38,6 +38,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime"
 	"runtime/pprof"
 	"strconv"
 	"strings"
@@ -48,10 +49,12 @@ import (
 )
 
 var (
-	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-	printf     = flag.Bool("print", false, "print replies")
-	compress   = flag.Bool("compress", false, "compress replies")
-	tsig       = flag.String("tsig", "", "use MD5 hmac tsig: keyname:base64")
+	cpuprofile  = flag.String("cpuprofile", "", "write cpu profile to file")
+	printf      = flag.Bool("print", false, "print replies")
+	compress    = flag.Bool("compress", false, "compress replies")
+	tsig        = flag.String("tsig", "", "use MD5 hmac tsig: keyname:base64")
+	soreuseport = flag.Int("soreuseport", 0, "use SO_REUSE_PORT")
+	cpu         = flag.Int("cpu", 0, "number of cpu to use")
 )
 
 const dom = "whoami.miek.nl."
@@ -138,15 +141,16 @@ func handleReflect(w dns.ResponseWriter, r *dns.Msg) {
 	w.WriteMsg(m)
 }
 
-func serve(net, name, secret string) {
+func serve(net, name, secret string, soreuseport bool) {
 	switch name {
 	case "":
-		server := &dns.Server{Addr: ":8053", Net: net, TsigSecret: nil}
+		server := &dns.Server{Addr: "[::]:8053", Net: net, TsigSecret: nil, Soreuseport: soreuseport}
 		if err := server.ListenAndServe(); err != nil {
 			fmt.Printf("Failed to setup the "+net+" server: %s\n", err.Error())
+
 		}
 	default:
-		server := &dns.Server{Addr: ":8053", Net: net, TsigSecret: map[string]string{name: secret}}
+		server := &dns.Server{Addr: ":8053", Net: net, TsigSecret: map[string]string{name: secret}, Soreuseport: soreuseport}
 		if err := server.ListenAndServe(); err != nil {
 			fmt.Printf("Failed to setup the "+net+" server: %s\n", err.Error())
 		}
@@ -172,9 +176,19 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
+	if *cpu != 0 {
+		runtime.GOMAXPROCS(*cpu)
+	}
 	dns.HandleFunc("miek.nl.", handleReflect)
-	go serve("tcp", name, secret)
-	go serve("udp", name, secret)
+	if *soreuseport > 0 {
+		for i := 0; i < *soreuseport; i++ {
+			go serve("tcp", name, secret, true)
+			go serve("udp", name, secret, true)
+		}
+	} else {
+		go serve("tcp", name, secret, false)
+		go serve("udp", name, secret, false)
+	}
 	sig := make(chan os.Signal)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	s := <-sig
