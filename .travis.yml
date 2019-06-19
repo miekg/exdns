@@ -1,7 +1,8 @@
 language: go
 sudo: false
 go:
-  - "1.1.x"
+  - "1.11.x"
+  - "1.12.x"
 
 script:
   - cd $HOME/gopath/src/github.com/miekg/exdns/q; go build
