@@ -13,3 +13,4 @@ Currently they include:
 * `check-soa`: check the SOA record of zones for all nameservers
 * `q`: dig-like query tool
 * `reflect`: reflection nameserver
+* `resolver-query`: how to query a public resolver
