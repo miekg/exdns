@@ -144,13 +144,13 @@ func handleReflect(w dns.ResponseWriter, r *dns.Msg) {
 func serve(net, name, secret string, soreuseport bool) {
 	switch name {
 	case "":
-		server := &dns.Server{Addr: "[::]:8053", Net: net, TsigSecret: nil, Soreuseport: soreuseport}
+		server := &dns.Server{Addr: "[::]:8053", Net: net, TsigSecret: nil, ReusePort: soreuseport}
 		if err := server.ListenAndServe(); err != nil {
 			fmt.Printf("Failed to setup the "+net+" server: %s\n", err.Error())
 
 		}
 	default:
-		server := &dns.Server{Addr: ":8053", Net: net, TsigSecret: map[string]string{name: secret}, Soreuseport: soreuseport}
+		server := &dns.Server{Addr: ":8053", Net: net, TsigSecret: map[string]string{name: secret}, ReusePort: soreuseport}
 		if err := server.ListenAndServe(); err != nil {
 			fmt.Printf("Failed to setup the "+net+" server: %s\n", err.Error())
 		}
