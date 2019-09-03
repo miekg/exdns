@@ -353,7 +353,11 @@ Query:
 		switch err {
 		case nil:
 			//do nothing
-		case dns.ErrTruncated:
+		default:
+			fmt.Printf(";; %s\n", err.Error())
+			continue
+		}
+		if(r.Truncated) {
 			if *fallback {
 				if !*dnssec {
 					fmt.Printf(";; Truncated, trying %d bytes bufsize\n", dns.DefaultMsgSize)
@@ -375,9 +379,6 @@ Query:
 				}
 			}
 			fmt.Printf(";; Truncated\n")
-		default:
-			fmt.Printf(";; %s\n", err.Error())
-			continue
 		}
 		if r.Id != m.Id {
 			fmt.Fprintf(os.Stderr, "Id mismatch\n")
