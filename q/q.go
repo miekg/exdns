@@ -29,26 +29,29 @@ import (
 // TODO(miek): serial in ixfr
 
 var (
-	dnskey   *dns.DNSKEY
-	short    = flag.Bool("short", false, "abbreviate long DNSSEC records")
-	dnssec   = flag.Bool("dnssec", false, "request DNSSEC records")
-	query    = flag.Bool("question", false, "show question")
-	check    = flag.Bool("check", false, "check internal DNSSEC consistency")
-	six      = flag.Bool("6", false, "use IPv6 only")
-	four     = flag.Bool("4", false, "use IPv4 only")
-	anchor   = flag.String("anchor", "", "use the DNSKEY in this file as trust anchor")
-	tsig     = flag.String("tsig", "", "request tsig with key: [hmac:]name:key")
-	port     = flag.Int("port", 53, "port number to use")
-	aa       = flag.Bool("aa", false, "set AA flag in query")
-	ad       = flag.Bool("ad", false, "set AD flag in query")
-	cd       = flag.Bool("cd", false, "set CD flag in query")
-	rd       = flag.Bool("rd", true, "set RD flag in query")
-	fallback = flag.Bool("fallback", false, "fallback to 4096 bytes bufsize and after that TCP")
-	tcp      = flag.Bool("tcp", false, "TCP mode, multiple queries are asked over the same connection")
-	nsid     = flag.Bool("nsid", false, "set edns nsid option")
-	client   = flag.String("client", "", "set edns client-subnet option")
-	opcode   = flag.String("opcode", "query", "set opcode to query|update|notify")
-	rcode    = flag.String("rcode", "success", "set rcode to noerror|formerr|nxdomain|servfail|...")
+	dnskey       *dns.DNSKEY
+	short        = flag.Bool("short", false, "abbreviate long DNSSEC records")
+	dnssec       = flag.Bool("dnssec", false, "request DNSSEC records")
+	query        = flag.Bool("question", false, "show question")
+	check        = flag.Bool("check", false, "check internal DNSSEC consistency")
+	six          = flag.Bool("6", false, "use IPv6 only")
+	four         = flag.Bool("4", false, "use IPv4 only")
+	anchor       = flag.String("anchor", "", "use the DNSKEY in this file as trust anchor")
+	tsig         = flag.String("tsig", "", "request tsig with key: [hmac:]name:key")
+	port         = flag.Int("port", 53, "port number to use")
+	aa           = flag.Bool("aa", false, "set AA flag in query")
+	ad           = flag.Bool("ad", false, "set AD flag in query")
+	cd           = flag.Bool("cd", false, "set CD flag in query")
+	rd           = flag.Bool("rd", true, "set RD flag in query")
+	fallback     = flag.Bool("fallback", false, "fallback to 4096 bytes bufsize and after that TCP")
+	tcp          = flag.Bool("tcp", false, "TCP mode, multiple queries are asked over the same connection")
+	timeoutDial  = flag.Duration("timeout-dial", 2*time.Second, "Dial timeout")
+	timeoutRead  = flag.Duration("timeout-read", 2*time.Second, "Read timeout")
+	timeoutWrite = flag.Duration("timeout-write", 2*time.Second, "Write timeout")
+	nsid         = flag.Bool("nsid", false, "set edns nsid option")
+	client       = flag.String("client", "", "set edns client-subnet option")
+	opcode       = flag.String("opcode", "query", "set opcode to query|update|notify")
+	rcode        = flag.String("rcode", "success", "set rcode to noerror|formerr|nxdomain|servfail|...")
 )
 
 func main() {
@@ -170,6 +173,9 @@ func main() {
 			c.Net = "tcp6"
 		}
 	}
+	c.DialTimeout = *timeoutDial
+	c.ReadTimeout = *timeoutRead
+	c.WriteTimeout = *timeoutWrite
 
 	m := &dns.Msg{
 		MsgHdr: dns.MsgHdr{
@@ -236,7 +242,7 @@ func main() {
 			tcp = "tcp6"
 		}
 		var err error
-		if co.Conn, err = net.DialTimeout(tcp, nameserver, 2*time.Second); err != nil {
+		if co.Conn, err = net.DialTimeout(tcp, nameserver, *timeoutDial); err != nil {
 			fmt.Fprintf(os.Stderr, "Dialing "+nameserver+" failed: "+err.Error()+"\n")
 			return
 		}
@@ -262,8 +268,8 @@ func main() {
 					continue
 				}
 			}
-			co.SetReadDeadline(time.Now().Add(2 * time.Second))
-			co.SetWriteDeadline(time.Now().Add(2 * time.Second))
+			co.SetReadDeadline(time.Now().Add(*timeoutRead))
+			co.SetWriteDeadline(time.Now().Add(*timeoutWrite))
 
 			if *query {
 				fmt.Printf("%s", m.String())
