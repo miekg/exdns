@@ -39,6 +39,7 @@ var (
 	anchor       = flag.String("anchor", "", "use the DNSKEY in this file as trust anchor")
 	tsig         = flag.String("tsig", "", "request tsig with key: [hmac:]name:key")
 	port         = flag.Int("port", 53, "port number to use")
+	laddr        = flag.String("laddr", "", "local address to use")
 	aa           = flag.Bool("aa", false, "set AA flag in query")
 	ad           = flag.Bool("ad", false, "set AD flag in query")
 	cd           = flag.Bool("cd", false, "set CD flag in query")
@@ -177,6 +178,16 @@ func main() {
 	c.ReadTimeout = *timeoutRead
 	c.WriteTimeout = *timeoutWrite
 
+	if *laddr != "" {
+		c.Dialer = &net.Dialer{Timeout: c.DialTimeout}
+		ip := net.ParseIP(*laddr)
+		if *tcp {
+			c.Dialer.LocalAddr = &net.TCPAddr{IP: ip}
+		} else {
+			c.Dialer.LocalAddr = &net.UDPAddr{IP: ip}
+		}
+	}
+
 	m := &dns.Msg{
 		MsgHdr: dns.MsgHdr{
 			Authoritative:     *aa,
@@ -242,10 +253,18 @@ func main() {
 			tcp = "tcp6"
 		}
 		var err error
-		if co.Conn, err = net.DialTimeout(tcp, nameserver, *timeoutDial); err != nil {
+
+		if c.Dialer != nil {
+			co.Conn, err = c.Dialer.Dial(tcp, nameserver)
+		} else {
+			co.Conn, err = net.DialTimeout(tcp, nameserver, *timeoutDial)
+		}
+
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Dialing "+nameserver+" failed: "+err.Error()+"\n")
 			return
 		}
+
 		defer co.Close()
 		qt := dns.TypeA
 		qc := uint16(dns.ClassINET)
