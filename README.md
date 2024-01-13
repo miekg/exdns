@@ -1,4 +1,3 @@
-[![Build Status](https://travis-ci.org/miekg/exdns.svg?branch=master)](https://travis-ci.org/miekg/exdns)
 [![BSD 2-clause license](https://img.shields.io/github/license/miekg/exdns.svg?maxAge=2592000)](https://opensource.org/licenses/BSD-2-Clause)
 
 # Examples made with Go DNS
@@ -13,3 +12,4 @@ Currently they include:
 * `check-soa`: check the SOA record of zones for all nameservers
 * `q`: dig-like query tool
 * `reflect`: reflection nameserver
+* `notprox`: a notify proxy server

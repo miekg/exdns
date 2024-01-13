@@ -1,6 +1,6 @@
 module github.com/miekg/exdns
 
-go 1.21.1
+go 1.21
 
 require github.com/miekg/dns v1.1.56
 
