@@ -52,7 +52,7 @@ var (
 	cpuprofile  = flag.String("cpuprofile", "", "write cpu profile to file")
 	printf      = flag.Bool("print", false, "print replies")
 	compress    = flag.Bool("compress", false, "compress replies")
-	tsig        = flag.String("tsig", "", "use MD5 hmac tsig: keyname:base64")
+	tsig        = flag.String("tsig", "", "use SHA256 hmac tsig: keyname:base64")
 	soreuseport = flag.Int("soreuseport", 0, "use SO_REUSE_PORT")
 	cpu         = flag.Int("cpu", 0, "number of cpu to use")
 )
@@ -122,7 +122,7 @@ func handleReflect(w dns.ResponseWriter, r *dns.Msg) {
 
 	if r.IsTsig() != nil {
 		if w.TsigStatus() == nil {
-			m.SetTsig(r.Extra[len(r.Extra)-1].(*dns.TSIG).Hdr.Name, dns.HmacMD5, 300, time.Now().Unix())
+			m.SetTsig(r.Extra[len(r.Extra)-1].(*dns.TSIG).Hdr.Name, dns.HmacSHA256, 300, time.Now().Unix())
 		} else {
 			println("Status", w.TsigStatus().Error())
 		}
