@@ -18,9 +18,9 @@ import (
 	"github.com/miekg/dns"
 )
 
-// route holds all the routing information
+// routes holds all the routing information.
 var routes = []Route{
-	{"miek.nl.", net.ParseIP("127.0.0.1"), net.ParseIP("10.10.0.1")},
+	{Zone: "miek.nl.", From: net.ParseIP("127.0.0.1"), To: net.ParseIP("10.10.0.1")},
 }
 
 func main() {
